@@ -1,9 +1,13 @@
-import Link from "next/link";
+import type { AnchorHTMLAttributes } from "react";
 import {
   ArrowRight, Award, CakeSlice, CalendarDays, Check, ChevronDown,
   Gift, HeartHandshake, MapPin, PartyPopper, Sparkles, Star, Trophy,
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
+
+function Link({ href, children, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) {
+  return <a href={href} {...props}>{children}</a>;
+}
 
 const plans = [
   { name: "Starter", people: "Up to 25 employees", price: "$29", featured: false },
