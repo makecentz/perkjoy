@@ -10,8 +10,8 @@ import { allowedStrings, hashProfileToken, PROFILE_INTERESTS, profileCompletenes
 const employee: Employee = { id: "employee-1", firstName: "Alex", lastName: "Rivera", email: "alex@example.com", department: "Design", jobTitle: "Designer", birthdayMonth: 8, birthdayDay: 14, hireDate: "2021-08-20", status: "active" };
 
 test("calculates the next birthday without storing a birth year", () => {
-  assert.equal(nextBirthday(employee, new Date(2026, 7, 1, 12)).toISOString().slice(0, 10), "2026-08-14");
-  assert.equal(nextBirthday(employee, new Date(2026, 7, 15, 12)).toISOString().slice(0, 10), "2027-08-14");
+  assert.equal(nextBirthday(employee, new Date(2026, 7, 1, 12))?.toISOString().slice(0, 10), "2026-08-14");
+  assert.equal(nextBirthday(employee, new Date(2026, 7, 15, 12))?.toISOString().slice(0, 10), "2027-08-14");
 });
 
 test("handles February 29 according to organization preference", () => {
@@ -23,8 +23,8 @@ test("handles February 29 according to organization preference", () => {
 
 test("calculates anniversary year and next date", () => {
   const result = nextAnniversary(employee, new Date(2026, 7, 1, 12));
-  assert.equal(result.years, 5);
-  assert.equal(result.date.toISOString().slice(0, 10), "2026-08-20");
+  assert.equal(result?.years, 5);
+  assert.equal(result?.date.toISOString().slice(0, 10), "2026-08-20");
 });
 
 test("builds deterministic keys that prevent duplicate reward events", () => {

@@ -3,15 +3,44 @@ export type Employee = {
   firstName: string;
   lastName: string;
   email: string;
+  phone?: string | null;
+  avatarPath?: string | null;
+  avatarUrl?: string | null;
   department: string;
+  departmentId?: string | null;
   jobTitle: string;
-  birthdayMonth: number;
-  birthdayDay: number;
-  hireDate: string;
+  managerEmployeeId?: string | null;
+  managerName?: string | null;
+  employeeNumber?: string | null;
+  birthdayMonth: number | null;
+  birthdayDay: number | null;
+  hireDate: string | null;
   status: "active" | "inactive";
   workMode?: "office" | "remote" | "hybrid";
   preferredDelivery?: "workplace" | "home" | "digital_only";
   locationId?: string | null;
+  workLocation?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
+  deliverySameAsWork?: boolean;
+  deliveryAddressLine1?: string | null;
+  deliveryAddressLine2?: string | null;
+  deliveryCity?: string | null;
+  deliveryState?: string | null;
+  deliveryPostalCode?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type EmployeeActivity = {
+  id: string;
+  employeeId: string;
+  action: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
 };
 
 export type Rule = {
@@ -141,6 +170,11 @@ export type OrganizationLocation = {
   name: string;
   locationType: "office" | "remote";
   address: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
   active: boolean;
 };
 
@@ -226,6 +260,7 @@ export type TeamCelebration = {
 
 export type Workspace = {
   organization: { id: string; name: string; timezone: string; monthlyBudgetCents: number };
+  currentUserRole?: "OWNER" | "ADMIN" | "MANAGER" | "VIEWER";
   organizationSettings: {
     reminderDays: number[];
     notificationPreferences: { eventReminders: boolean; budgetAlerts: boolean; rewardFailures: boolean; deliveryUpdates: boolean };
@@ -234,6 +269,8 @@ export type Workspace = {
     onboardingCompleted: boolean;
   };
   employees: Employee[];
+  departments?: { id: string; name: string }[];
+  employeeActivity?: EmployeeActivity[];
   rules: Rule[];
   rewards: Reward[];
   notifications: Notification[];

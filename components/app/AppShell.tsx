@@ -43,6 +43,7 @@ import {
   NotificationCenter,
 } from "@/components/app/PhaseHControls";
 import { authenticatedFetch } from "@/lib/supabase/fetch";
+import { EmployeesExperience } from "@/components/employees/EmployeesExperience";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 type View =
@@ -216,24 +217,24 @@ export function AppShell({ view = "dashboard" }: { view?: View }) {
       .flatMap((employee, index) => {
         const birthday = nextBirthday(employee);
         const anniversary = nextAnniversary(employee);
-        return [
-          {
+        const moments: Celebration[] = [];
+        if (birthday) moments.push({
             employee,
             type: "Birthday" as const,
             date: birthday,
             label: "Birthday",
             amount: 5000,
             tone: ["coral", "purple", "green"][index % 3],
-          },
-          {
+          });
+        if (anniversary) moments.push({
             employee,
             type: "Anniversary" as const,
             date: anniversary.date,
             label: `${anniversary.years} Year Anniversary`,
             amount: 7500,
             tone: "gold",
-          },
-        ];
+          });
+        return moments;
       })
       .sort((a, b) => a.date.getTime() - b.date.getTime())
       .slice(0, 10);
@@ -990,6 +991,10 @@ function EmployeesView({
     payload: Record<string, unknown>,
   ) => Promise<(Workspace & { profileInviteUrl?: string }) | undefined>;
 }) {
+  void celebrations;
+  void openEmployee;
+  return <EmployeesExperience data={data} mutate={mutate} openRecognize={openRecognize} />;
+  /* Legacy employee list kept below for reference while the new experience settles.
   const [query, setQuery] = useState("");
   const [inviteLink, setInviteLink] = useState("");
   const filtered = data.employees.filter(
@@ -1170,7 +1175,7 @@ function EmployeesView({
         <small>Raw invitation tokens are shown once and never stored.</small>
       </div>
     </>
-  );
+  ); */
 }
 
 function CelebrationsView({

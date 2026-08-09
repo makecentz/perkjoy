@@ -744,14 +744,22 @@ export type Database = {
         Row: {
           address_line_1: string | null
           address_line_2: string | null
-          birthday_day: number
-          birthday_month: number
+          avatar_path: string | null
+          birthday_day: number | null
+          birthday_month: number | null
           city: string | null
           created_at: string
           department_id: string | null
+          delivery_address_line_1: string | null
+          delivery_address_line_2: string | null
+          delivery_city: string | null
+          delivery_postal_code: string | null
+          delivery_same_as_work: boolean
+          delivery_state: string | null
           email: string
+          employee_number: string | null
           first_name: string
-          hire_date: string
+          hire_date: string | null
           id: string
           job_title: string | null
           last_name: string
@@ -771,14 +779,22 @@ export type Database = {
         Insert: {
           address_line_1?: string | null
           address_line_2?: string | null
-          birthday_day: number
-          birthday_month: number
+          avatar_path?: string | null
+          birthday_day?: number | null
+          birthday_month?: number | null
           city?: string | null
           created_at?: string
           department_id?: string | null
+          delivery_address_line_1?: string | null
+          delivery_address_line_2?: string | null
+          delivery_city?: string | null
+          delivery_postal_code?: string | null
+          delivery_same_as_work?: boolean
+          delivery_state?: string | null
           email: string
+          employee_number?: string | null
           first_name: string
-          hire_date: string
+          hire_date?: string | null
           id?: string
           job_title?: string | null
           last_name: string
@@ -798,14 +814,22 @@ export type Database = {
         Update: {
           address_line_1?: string | null
           address_line_2?: string | null
-          birthday_day?: number
-          birthday_month?: number
+          avatar_path?: string | null
+          birthday_day?: number | null
+          birthday_month?: number | null
           city?: string | null
           created_at?: string
           department_id?: string | null
+          delivery_address_line_1?: string | null
+          delivery_address_line_2?: string | null
+          delivery_city?: string | null
+          delivery_postal_code?: string | null
+          delivery_same_as_work?: boolean
+          delivery_state?: string | null
           email?: string
+          employee_number?: string | null
           first_name?: string
-          hire_date?: string
+          hire_date?: string | null
           id?: string
           job_title?: string | null
           last_name?: string
@@ -2219,4 +2243,3 @@ export const Constants = {
     },
   },
 } as const
-

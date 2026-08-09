@@ -3,6 +3,7 @@ import { automationEventKey, isAutomationDue, ruleMatchesEvent, timingOffsetDays
 import { getAutomationTemplate } from "@/lib/automation-templates";
 import { hashProfileToken, profileToken } from "@/lib/celebration-profile";
 import { nextAnniversary, nextBirthday } from "@/lib/celebrations";
+import { employeeInputSchema, type EmployeeInput } from "@/lib/employees";
 import type { Employee, EmployeeEvent, Rule, Workspace } from "@/lib/types";
 import { RuleBasedRecommendationProvider } from "@/services/recommendations/CelebrationRecommendationService";
 import type { Database, Json } from "./database.types";
@@ -69,23 +70,23 @@ async function audit(
   }), "Writing the audit log");
 }
 
-async function organizationIdFor(client: Client, user: User) {
+async function organizationMembershipFor(client: Client, user: User) {
   const membership = requireResult(await client
     .from("organization_members")
-    .select("organization_id")
+    .select("organization_id,role")
     .eq("user_id", user.id)
     .order("created_at")
     .limit(1)
     .single(), "Loading organization membership");
-  return membership.organization_id;
+  return membership;
 }
 
-async function loadWorkspace(client: Client, organizationId: string): Promise<Workspace> {
+async function loadWorkspace(client: Client, organizationId: string, currentUserRole: Workspace["currentUserRole"] = "VIEWER"): Promise<Workspace> {
   const results = await Promise.all([
     client.from("organizations").select("*").eq("id", organizationId).single(),
     client.from("organization_settings").select("*").eq("organization_id", organizationId).single(),
     client.from("departments").select("*").eq("organization_id", organizationId),
-    client.from("employees").select("id,organization_id,first_name,last_name,email,birthday_month,birthday_day,hire_date,department_id,job_title,manager_employee_id,work_location,recognition_preferences,status,work_mode,preferred_celebration_delivery,organization_location_id,created_at,updated_at").eq("organization_id", organizationId).order("first_name"),
+    client.from("employees").select("id,organization_id,first_name,last_name,email,phone,avatar_path,birthday_month,birthday_day,hire_date,department_id,job_title,manager_employee_id,employee_number,work_location,address_line_1,address_line_2,city,state,postal_code,delivery_same_as_work,delivery_address_line_1,delivery_address_line_2,delivery_city,delivery_state,delivery_postal_code,recognition_preferences,status,work_mode,preferred_celebration_delivery,organization_location_id,created_at,updated_at").eq("organization_id", organizationId).order("first_name"),
     client.from("automation_rules").select("*").eq("organization_id", organizationId).order("created_at"),
     client.from("recognition_events").select("*").eq("organization_id", organizationId),
     client.from("rewards").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }),
@@ -110,6 +111,7 @@ async function loadWorkspace(client: Client, organizationId: string): Promise<Wo
     client.from("concierge_requests").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }),
     client.from("team_celebrations").select("*").eq("organization_id", organizationId).order("event_date"),
     client.from("team_celebration_participants").select("*").eq("organization_id", organizationId),
+    client.from("audit_logs").select("id,action,entity_id,metadata,created_at").eq("organization_id", organizationId).eq("entity_type", "employee").order("created_at", { ascending: false }).limit(250),
   ]);
 
   for (const result of results) {
@@ -144,15 +146,29 @@ async function loadWorkspace(client: Client, organizationId: string): Promise<Wo
   const concierge = results[25].data as Row<"concierge_requests">[];
   const teamCelebrations = results[26].data as Row<"team_celebrations">[];
   const participants = results[27].data as Row<"team_celebration_participants">[];
+  const employeeAudit = results[28].data as Pick<Row<"audit_logs">, "id" | "action" | "entity_id" | "metadata" | "created_at">[];
 
   const departmentName = new Map(departments.map((department) => [department.id, department.name]));
+  const managerName = new Map(employees.map((employee) => [employee.id, `${employee.first_name} ${employee.last_name}`]));
+  const avatarPaths = employees.flatMap((employee) => employee.avatar_path ? [employee.avatar_path] : []);
+  const signedAvatarResult = avatarPaths.length
+    ? await client.storage.from("employee-avatars").createSignedUrls(avatarPaths, 3600)
+    : { data: [], error: null };
+  const avatarUrl = new Map((signedAvatarResult.data ?? []).map((item) => [item.path, item.signedUrl]));
   const employeeRows: Employee[] = employees.map((employee) => ({
     id: employee.id,
     firstName: employee.first_name,
     lastName: employee.last_name,
     email: employee.email,
+    phone: employee.phone,
+    avatarPath: employee.avatar_path,
+    avatarUrl: employee.avatar_path ? avatarUrl.get(employee.avatar_path) ?? null : null,
     department: departmentName.get(employee.department_id ?? "") ?? "General",
+    departmentId: employee.department_id,
     jobTitle: employee.job_title ?? "Team Member",
+    managerEmployeeId: employee.manager_employee_id,
+    managerName: employee.manager_employee_id ? managerName.get(employee.manager_employee_id) ?? null : null,
+    employeeNumber: employee.employee_number,
     birthdayMonth: employee.birthday_month,
     birthdayDay: employee.birthday_day,
     hireDate: employee.hire_date,
@@ -160,6 +176,20 @@ async function loadWorkspace(client: Client, organizationId: string): Promise<Wo
     workMode: employee.work_mode as Employee["workMode"],
     preferredDelivery: employee.preferred_celebration_delivery as Employee["preferredDelivery"],
     locationId: employee.organization_location_id,
+    workLocation: employee.work_location,
+    addressLine1: employee.address_line_1,
+    addressLine2: employee.address_line_2,
+    city: employee.city,
+    state: employee.state,
+    postalCode: employee.postal_code,
+    deliverySameAsWork: employee.delivery_same_as_work,
+    deliveryAddressLine1: employee.delivery_address_line_1,
+    deliveryAddressLine2: employee.delivery_address_line_2,
+    deliveryCity: employee.delivery_city,
+    deliveryState: employee.delivery_state,
+    deliveryPostalCode: employee.delivery_postal_code,
+    createdAt: employee.created_at,
+    updatedAt: employee.updated_at,
   }));
 
   const vendorName = new Map(vendors.map((vendor) => [vendor.id, vendor.business_name]));
@@ -195,6 +225,7 @@ async function loadWorkspace(client: Client, organizationId: string): Promise<Wo
       timezone: organization.timezone,
       monthlyBudgetCents: cents(settings.monthly_budget),
     },
+    currentUserRole,
     organizationSettings: {
       reminderDays: settings.reminder_days,
       notificationPreferences: {
@@ -208,6 +239,14 @@ async function loadWorkspace(client: Client, organizationId: string): Promise<Wo
       onboardingCompleted: settings.onboarding_completed,
     },
     employees: employeeRows,
+    departments: departments.map((department) => ({ id: department.id, name: department.name })),
+    employeeActivity: employeeAudit.flatMap((item) => item.entity_id ? [{
+      id: item.id,
+      employeeId: item.entity_id,
+      action: item.action,
+      metadata: jsonObject(item.metadata),
+      createdAt: item.created_at,
+    }] : []),
     rules: rules.map((rule) => ({
       id: rule.id,
       name: rule.name,
@@ -312,6 +351,11 @@ async function loadWorkspace(client: Client, organizationId: string): Promise<Wo
       name: location.name,
       locationType: location.location_type as "office" | "remote",
       address: [location.address_line_1, location.address_line_2, location.city, location.state, location.postal_code].filter(Boolean).join(", ") || null,
+      addressLine1: location.address_line_1,
+      addressLine2: location.address_line_2,
+      city: location.city,
+      state: location.state,
+      postalCode: location.postal_code,
       active: location.active,
     })),
     employeeLocations: employees.flatMap((employee) => employee.organization_location_id
@@ -399,29 +443,98 @@ async function departmentId(client: Client, organizationId: string, name: string
   return requireResult(await client.from("departments").insert({ organization_id: organizationId, name: safeName }).select("id").single(), "Creating the department").id;
 }
 
+function employeeValues(input: EmployeeInput, organizationId: string, targetDepartmentId: string | null) {
+  return {
+    organization_id: organizationId,
+    first_name: input.firstName,
+    last_name: input.lastName,
+    email: input.email,
+    phone: input.phone,
+    birthday_month: input.birthdayMonth,
+    birthday_day: input.birthdayDay,
+    hire_date: input.hireDate,
+    department_id: targetDepartmentId,
+    job_title: input.jobTitle,
+    manager_employee_id: input.managerEmployeeId,
+    employee_number: input.employeeNumber,
+    status: input.status,
+    work_mode: input.workMode,
+    preferred_celebration_delivery: input.preferredDelivery,
+    organization_location_id: input.organizationLocationId,
+    work_location: input.workLocation,
+    address_line_1: input.addressLine1,
+    address_line_2: input.addressLine2,
+    city: input.city,
+    state: input.state,
+    postal_code: input.postalCode,
+    delivery_same_as_work: input.deliverySameAsWork,
+    delivery_address_line_1: input.deliverySameAsWork ? null : input.deliveryAddressLine1,
+    delivery_address_line_2: input.deliverySameAsWork ? null : input.deliveryAddressLine2,
+    delivery_city: input.deliverySameAsWork ? null : input.deliveryCity,
+    delivery_state: input.deliverySameAsWork ? null : input.deliveryState,
+    delivery_postal_code: input.deliverySameAsWork ? null : input.deliveryPostalCode,
+  };
+}
+
+function employeeModel(id: string, input: EmployeeInput): Employee {
+  return {
+    id,
+    firstName: input.firstName,
+    lastName: input.lastName,
+    email: input.email,
+    department: input.department ?? "General",
+    jobTitle: input.jobTitle ?? "Team Member",
+    birthdayMonth: input.birthdayMonth,
+    birthdayDay: input.birthdayDay,
+    hireDate: input.hireDate,
+    status: input.status,
+  };
+}
+
+async function syncEmployeeEvents(client: Client, organizationId: string, employee: Employee) {
+  const types = requireResult(await client.from("celebration_types").select("id,slug").eq("organization_id", organizationId).in("slug", ["birthday", "work-anniversary"]), "Loading celebration types");
+  const existing = requireResult(await client.from("employee_events").select("id,celebration_type_id").eq("organization_id", organizationId).eq("employee_id", employee.id), "Loading employee moments");
+  const birthday = nextBirthday(employee);
+  const anniversary = nextAnniversary(employee);
+  const moments = [
+    { slug: "birthday", date: birthday, title: `${employee.firstName}'s Birthday`, category: "life" },
+    { slug: "work-anniversary", date: anniversary?.date ?? null, title: anniversary ? `${employee.firstName} — ${anniversary.years} Year Anniversary` : "", category: "career" },
+  ];
+  for (const moment of moments) {
+    const typeId = types.find((type) => type.slug === moment.slug)?.id;
+    const current = existing.find((event) => event.celebration_type_id === typeId);
+    if (!moment.date) {
+      if (current) requireResult(await client.from("employee_events").delete().eq("id", current.id).eq("organization_id", organizationId), "Removing an unset employee moment");
+      continue;
+    }
+    const values = { title: moment.title, event_date: moment.date.toISOString().slice(0, 10), category: moment.category };
+    if (current) requireResult(await client.from("employee_events").update(values).eq("id", current.id).eq("organization_id", organizationId), "Updating the employee moment");
+    else requireResult(await client.from("employee_events").insert({ organization_id: organizationId, employee_id: employee.id, celebration_type_id: typeId, ...values }), "Creating the employee moment");
+  }
+}
+
 async function createEmployeeEvents(client: Client, organizationId: string, employee: Employee) {
   const types = requireResult(await client.from("celebration_types").select("id,slug").eq("organization_id", organizationId).in("slug", ["birthday", "work-anniversary"]), "Loading celebration types");
   const birthday = nextBirthday(employee);
   const anniversary = nextAnniversary(employee);
-  const rows = [
-    {
+  const rows: Tables["employee_events"]["Insert"][] = [];
+  if (birthday) rows.push({
       organization_id: organizationId,
       employee_id: employee.id,
       celebration_type_id: types.find((type) => type.slug === "birthday")?.id,
       title: `${employee.firstName}'s Birthday`,
       event_date: birthday.toISOString().slice(0, 10),
       category: "life",
-    },
-    {
+    });
+  if (anniversary) rows.push({
       organization_id: organizationId,
       employee_id: employee.id,
       celebration_type_id: types.find((type) => type.slug === "work-anniversary")?.id,
       title: `${employee.firstName} — ${anniversary.years} Year Anniversary`,
       event_date: anniversary.date.toISOString().slice(0, 10),
       category: "career",
-    },
-  ];
-  requireResult(await client.from("employee_events").insert(rows), "Creating employee moments");
+    });
+  if (rows.length) requireResult(await client.from("employee_events").insert(rows), "Creating employee moments");
 }
 
 async function createNotification(client: Client, userId: string, organizationId: string, values: {
@@ -509,49 +622,104 @@ async function applyTemplate(client: Client, user: User, organizationId: string,
 }
 
 export async function getSupabaseWorkspace(client: Client, user: User) {
-  const organizationId = await organizationIdFor(client, user);
-  return loadWorkspace(client, organizationId);
+  const membership = await organizationMembershipFor(client, user);
+  return loadWorkspace(client, membership.organization_id, membership.role);
 }
 
 export async function mutateSupabaseWorkspace(client: Client, user: User, payload: Record<string, unknown>) {
-  const organizationId = await organizationIdFor(client, user);
+  const membership = await organizationMembershipFor(client, user);
+  const organizationId = membership.organization_id;
   const action = String(payload.action ?? "");
   let profileInviteUrl: string | undefined;
   let automationResult: { scheduled: number; approvals: number; duplicates: number; evaluated: number } | undefined;
+  let createdEmployeeId: string | undefined;
+  let importResult: { imported: number; skipped: number } | undefined;
 
   if (action === "addEmployee") {
-    const firstName = String(payload.firstName ?? "").trim();
-    const lastName = String(payload.lastName ?? "").trim();
-    const email = String(payload.email ?? "").trim().toLowerCase();
-    const birthdayMonth = Number(payload.birthdayMonth ?? 0);
-    const birthdayDay = Number(payload.birthdayDay ?? 0);
-    if (!firstName || !lastName || !email.includes("@") || birthdayMonth < 1 || birthdayMonth > 12 || birthdayDay < 1 || birthdayDay > 31) throw new Error("Add a valid employee name, email, and birthday.");
-    const department = await departmentId(client, organizationId, String(payload.department ?? "General"));
-    const employee = requireResult(await client.from("employees").insert({
-      organization_id: organizationId,
-      first_name: firstName,
-      last_name: lastName,
-      email,
-      birthday_month: birthdayMonth,
-      birthday_day: birthdayDay,
-      hire_date: String(payload.hireDate ?? today()),
-      department_id: department,
-      job_title: String(payload.jobTitle ?? "Team Member"),
-      work_mode: String(payload.workMode ?? "office"),
-      preferred_celebration_delivery: String(payload.preferredDelivery ?? "workplace"),
-    }).select("id,hire_date,preferred_celebration_delivery").single(), "Adding the employee");
+    const input = employeeInputSchema.parse(payload);
+    const targetDepartmentId = await departmentId(client, organizationId, input.department ?? "General");
+    const employee = requireResult(await client.from("employees").insert(employeeValues(input, organizationId, targetDepartmentId)).select("id,hire_date,preferred_celebration_delivery").single(), "Adding the employee");
+    createdEmployeeId = employee.id;
     requireResult(await client.from("celebration_profiles").insert({
       organization_id: organizationId,
       employee_id: employee.id,
       preferred_delivery: employee.preferred_celebration_delivery,
     }), "Creating the celebration profile");
-    await createEmployeeEvents(client, organizationId, {
-      id: employee.id, firstName, lastName, email,
-      department: String(payload.department ?? "General"),
-      jobTitle: String(payload.jobTitle ?? "Team Member"),
-      birthdayMonth, birthdayDay, hireDate: employee.hire_date, status: "active",
-    });
+    await createEmployeeEvents(client, organizationId, employeeModel(employee.id, input));
     await audit(client, user.id, organizationId, "employee.created", "employee", employee.id);
+  } else if (action === "updateEmployee") {
+    const input = employeeInputSchema.parse(payload);
+    if (!input.employeeId) throw new Error("Choose an employee to update.");
+    const existing = requireResult(await client.from("employees").select("*").eq("id", input.employeeId).eq("organization_id", organizationId).single(), "Finding the employee");
+    const targetDepartmentId = await departmentId(client, organizationId, input.department ?? "General");
+    requireResult(await client.from("employees").update(employeeValues(input, organizationId, targetDepartmentId)).eq("id", input.employeeId).eq("organization_id", organizationId), "Updating the employee");
+    await syncEmployeeEvents(client, organizationId, employeeModel(input.employeeId, input));
+    const changedFields = Object.entries(employeeValues(input, organizationId, targetDepartmentId)).filter(([key, value]) => String(existing[key as keyof typeof existing] ?? "") !== String(value ?? "")).map(([key]) => key);
+    await audit(client, user.id, organizationId, "employee.updated", "employee", input.employeeId, { changedFields });
+  } else if (action === "setEmployeeStatus") {
+    const employeeId = String(payload.employeeId ?? "");
+    const status = payload.status === "active" ? "active" : "inactive";
+    requireResult(await client.from("employees").update({ status }).eq("id", employeeId).eq("organization_id", organizationId), `${status === "active" ? "Reactivating" : "Deactivating"} the employee`);
+    await audit(client, user.id, organizationId, status === "active" ? "employee.reactivated" : "employee.deactivated", "employee", employeeId);
+  } else if (action === "updateEmployeeAvatar") {
+    const employeeId = String(payload.employeeId ?? "");
+    const avatarPath = payload.avatarPath ? String(payload.avatarPath) : null;
+    const employee = requireResult(await client.from("employees").select("avatar_path").eq("id", employeeId).eq("organization_id", organizationId).single(), "Finding the employee");
+    if (avatarPath && !avatarPath.startsWith(`${organizationId}/${employeeId}/`)) throw new Error("The avatar path does not match this employee.");
+    requireResult(await client.from("employees").update({ avatar_path: avatarPath }).eq("id", employeeId).eq("organization_id", organizationId), "Updating the employee photo");
+    if (employee.avatar_path && employee.avatar_path !== avatarPath) {
+      const removal = await client.storage.from("employee-avatars").remove([employee.avatar_path]);
+      if (removal.error) console.warn("employee_avatar_cleanup_failed", removal.error.message);
+    }
+    await audit(client, user.id, organizationId, avatarPath ? "employee.photo_updated" : "employee.photo_removed", "employee", employeeId);
+  } else if (action === "deleteEmployee") {
+    const employeeId = String(payload.employeeId ?? "");
+    const [rewardRows, giftRows, recognitionRows, employeeRow] = await Promise.all([
+      client.from("rewards").select("id", { count: "exact", head: true }).eq("employee_id", employeeId).eq("organization_id", organizationId),
+      client.from("gift_history").select("id", { count: "exact", head: true }).eq("employee_id", employeeId).eq("organization_id", organizationId),
+      client.from("recognition_events").select("id", { count: "exact", head: true }).eq("employee_id", employeeId).eq("organization_id", organizationId),
+      client.from("employees").select("avatar_path").eq("id", employeeId).eq("organization_id", organizationId).single(),
+    ]);
+    if ((rewardRows.count ?? 0) + (giftRows.count ?? 0) + (recognitionRows.count ?? 0) > 0) throw new Error("This employee has recognition history. Deactivate them to preserve reporting.");
+    const employee = requireResult(employeeRow, "Finding the employee");
+    if (employee.avatar_path) await client.storage.from("employee-avatars").remove([employee.avatar_path]);
+    requireResult(await client.from("employees").delete().eq("id", employeeId).eq("organization_id", organizationId), "Permanently deleting the employee");
+    await audit(client, user.id, organizationId, "employee.deleted", "employee", employeeId);
+  } else if (action === "importEmployees") {
+    const rows = Array.isArray(payload.rows) ? payload.rows.slice(0, 500) : [];
+    if (!rows.length) throw new Error("Add at least one valid CSV row.");
+    const parsed = rows.map((row) => employeeInputSchema.parse(row));
+    const normalizedEmails = parsed.map((row) => row.email);
+    if (new Set(normalizedEmails).size !== normalizedEmails.length) throw new Error("The CSV contains duplicate employee emails.");
+    const existingEmails = requireResult(await client.from("employees").select("email").eq("organization_id", organizationId).in("email", normalizedEmails), "Checking duplicate employees");
+    if (existingEmails.length) throw new Error(`An employee with ${existingEmails[0].email} already exists.`);
+    const ids = parsed.map(() => crypto.randomUUID());
+    const departmentIds = new Map<string, string>();
+    for (const input of parsed) {
+      const key = (input.department ?? "General").toLowerCase();
+      if (!departmentIds.has(key)) departmentIds.set(key, await departmentId(client, organizationId, input.department ?? "General"));
+    }
+    requireResult(await client.from("employees").insert(parsed.map((input, index) => ({
+      id: ids[index],
+      ...employeeValues(
+        { ...input, managerEmployeeId: null },
+        organizationId,
+        departmentIds.get((input.department ?? "General").toLowerCase()) ?? null,
+      ),
+    }))), "Importing employees");
+    const allManagers = requireResult(await client.from("employees").select("id,email").eq("organization_id", organizationId), "Matching employee managers");
+    const managerByEmail = new Map(allManagers.map((employee) => [employee.email.trim().toLowerCase(), employee.id]));
+    for (let index = 0; index < parsed.length; index += 1) {
+      const managerEmail = parsed[index].managerEmail;
+      const managerId = managerEmail ? managerByEmail.get(managerEmail.trim().toLowerCase()) : undefined;
+      if (managerId && managerId !== ids[index]) {
+        requireResult(await client.from("employees").update({ manager_employee_id: managerId }).eq("id", ids[index]).eq("organization_id", organizationId), "Assigning an imported manager");
+      }
+    }
+    requireResult(await client.from("celebration_profiles").insert(parsed.map((input, index) => ({ organization_id: organizationId, employee_id: ids[index], preferred_delivery: input.preferredDelivery }))), "Creating imported celebration profiles");
+    for (let index = 0; index < parsed.length; index += 1) await createEmployeeEvents(client, organizationId, employeeModel(ids[index], parsed[index]));
+    requireResult(await client.from("audit_logs").insert(parsed.map((input, index) => ({ organization_id: organizationId, user_id: user.id, action: "employee.imported", entity_type: "employee", entity_id: ids[index], metadata: { email: input.email } }))), "Recording the employee import");
+    importResult = { imported: parsed.length, skipped: rows.length - parsed.length };
   } else if (action === "recognize" || action === "quickCelebrate") {
     await createReward(client, user, organizationId, payload);
   } else if (action === "generateRecommendation") {
@@ -787,5 +955,5 @@ export async function mutateSupabaseWorkspace(client: Client, user: User, payloa
     throw new Error("Unknown workspace action.");
   }
 
-  return { ...await loadWorkspace(client, organizationId), profileInviteUrl, automationResult };
+  return { ...await loadWorkspace(client, organizationId, membership.role), profileInviteUrl, automationResult, createdEmployeeId, importResult };
 }

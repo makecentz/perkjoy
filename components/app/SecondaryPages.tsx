@@ -8,6 +8,7 @@ import { format } from "date-fns";
 import { Logo } from "@/components/brand/Logo";
 import type { Employee, Workspace } from "@/lib/types";
 import { authenticatedFetch } from "@/lib/supabase/fetch";
+import { EmployeeProfileExperience } from "@/components/employees/EmployeesExperience";
 
 function money(cents: number) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(cents / 100); }
 function name(employee: Employee) { return `${employee.firstName} ${employee.lastName}`; }
@@ -23,9 +24,11 @@ function DetailHeader({ backHref, backLabel }: { backHref: string; backLabel: st
   return <nav className="detail-page-nav"><Link href="/"><Logo /></Link><div><Link href={backHref}><ArrowLeft /> {backLabel}</Link><Link href="/dashboard">Dashboard</Link></div></nav>;
 }
 
-export function EmployeeDetailPage() {
+export function EmployeeDetailPage() { return <EmployeeProfileExperience />; }
+
+export function LegacyEmployeeDetailPage() {
   const params = useParams<{ id: string }>(); const { data, error } = useWorkspace();
-  const employee = data?.employees.find((item) => item.id === params.id);
+  const employee = data?.employees.find((item) => item.id === params.id) as (Employee & { birthdayMonth: number; birthdayDay: number; hireDate: string }) | undefined;
   if (!data && !error) return <main className="secondary-loading"><Sparkles /><p>Gathering this employee&apos;s celebration history…</p></main>;
   if (!data || error || !employee) return <main className="secondary-page"><DetailHeader backHref="/employees" backLabel="Employees" /><section className="secondary-not-found"><UserRound /><h1>Employee profile unavailable.</h1><p>{error || "This employee may have been removed or is outside your organization."}</p><Link className="button button-primary" href="/employees">Back to employees</Link></section></main>;
   const profile = data.profiles.find((item) => item.employeeId === employee.id); const locationAssignment = data.employeeLocations.find((item) => item.employeeId === employee.id); const location = data.organizationLocations.find((item) => item.id === locationAssignment?.organizationLocationId); const events = data.events.filter((item) => item.employeeId === employee.id); const rewards = data.rewards.filter((item) => item.employeeId === employee.id); const gifts = data.giftHistory.filter((item) => item.employeeId === employee.id);
