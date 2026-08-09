@@ -11,12 +11,12 @@ export async function generateMetadata(): Promise<Metadata> {
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const imageUrl = `${protocol}://${host}/og.png`;
-  const description = "PerkJoy remembers employee birthdays, anniversaries, and wins—then sends the perfect reward right on time.";
+  const description = "PerkJoy remembers employee birthdays, anniversaries, accomplishments, and life moments—then personalizes and helps deliver the celebration.";
   return {
-    title: { default: "PerkJoy — Employee appreciation on autopilot", template: "%s | PerkJoy" },
+    title: { default: "PerkJoy — Employee celebrations on autopilot", template: "%s | PerkJoy" },
     description,
     icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
-    openGraph: { title: "Never miss a moment worth celebrating.", description, type: "website", images: [{ url: imageUrl, width: 1200, height: 630, alt: "PerkJoy employee appreciation automation" }] },
+    openGraph: { title: "Never miss a moment worth celebrating.", description, type: "website", images: [{ url: imageUrl, width: 1200, height: 630, alt: "PerkJoy employee celebration automation" }] },
     twitter: { card: "summary_large_image", title: "Never miss a moment worth celebrating.", description, images: [imageUrl] },
   };
 }

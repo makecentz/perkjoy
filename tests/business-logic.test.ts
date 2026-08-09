@@ -3,6 +3,7 @@ import test from "node:test";
 import { birthdayForYear, celebrationEventKey, isLeapYear, nextAnniversary, nextBirthday } from "../lib/celebrations";
 import { validateBudget } from "../lib/budget";
 import type { Employee } from "../lib/types";
+import { RuleBasedRecommendationProvider } from "../services/recommendations/CelebrationRecommendationService";
 
 const employee: Employee = { id: "employee-1", firstName: "Alex", lastName: "Rivera", email: "alex@example.com", department: "Design", jobTitle: "Designer", birthdayMonth: 8, birthdayDay: 14, hireDate: "2021-08-20", status: "active" };
 
@@ -35,4 +36,26 @@ test("blocks or warns above-budget rewards according to policy", () => {
   assert.deepEqual(validateBudget(50000, 45000, 10000, true), { allowed: false, warning: "This reward would exceed the monthly budget." });
   assert.equal(validateBudget(50000, 45000, 10000, false).allowed, true);
   assert.equal(validateBudget(50000, 20000, 10000, true).warning, null);
+});
+
+test("recommends a local favorite when delivery, market, and budget allow it", () => {
+  const result = new RuleBasedRecommendationProvider().recommend({
+    employeeName: "Sarah", occasion: "Birthday", budgetCents: 7500, workMode: "hybrid",
+    preferredDelivery: "workplace", favoriteCake: "Chocolate", marketActive: true,
+  });
+  assert.equal(result.rewardType, "local");
+  assert.equal(result.title, "Chocolate Birthday Cake");
+  assert.equal(result.requiresApproval, true);
+  assert.match(result.reason, /favorite cake flavor/);
+});
+
+test("avoids repeating a previous local gift and falls back to digital", () => {
+  const result = new RuleBasedRecommendationProvider().recommend({
+    employeeName: "Marcus", occasion: "Birthday", budgetCents: 5000, workMode: "remote",
+    preferredDelivery: "digital_only", favoriteDrink: "Coffee", marketActive: true,
+    previousGiftTitles: ["Amazon digital reward"],
+  });
+  assert.equal(result.rewardType, "digital");
+  assert.equal(result.title, "Starbucks digital reward");
+  assert.equal(result.somethingDifferent, true);
 });

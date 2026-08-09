@@ -14,6 +14,7 @@ test("server-renders the finished PerkJoy public site", async () => {
   const html = await response.text();
   assert.match(html, /PerkJoy/);
   assert.match(html, /Never miss a moment/);
-  assert.match(html, /Employee appreciation on autopilot/);
+  assert.match(html, /Employee celebrations on autopilot/);
+  assert.match(html, /Start Celebrating/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/);
 });
