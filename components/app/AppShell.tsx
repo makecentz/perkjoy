@@ -99,7 +99,7 @@ export function AppShell({ view = "dashboard" }: { view?: View }) {
           <small>MANAGE</small>
           {nav.slice(7).map((item) => <Link className={item.view === view ? "active" : ""} href={item.href} key={item.view} onClick={() => setMobileOpen(false)}><item.icon />{item.label}</Link>)}
         </nav>
-        <div className="sidebar-card"><span><Sparkles /></span><b>Celebration streak</b><p>12 moments remembered this quarter.</p><div><i style={{ width: "78%" }} /></div></div>
+        <div className="sidebar-card"><span><Sparkles /></span><b>Moments handled</b><p>12 celebrations handled this quarter.</p><div><i style={{ width: "78%" }} /></div></div>
         <div className="sidebar-user"><span>TM</span><div><b>Taylor Morgan</b><small>Owner · Philly Creative</small></div><MoreHorizontal /></div>
       </aside>
 

@@ -64,10 +64,17 @@ export function MarketingHome() {
               <i><ArrowRight size={18} /></i>
               <div className="flow-step"><span><Gift size={19} /></span><small>$50 gift</small></div>
             </div>
-            <div className="success-strip"><Check size={16} /> Reward queued for 9:00 AM tomorrow <span>Automatic</span></div>
+            <div className="success-strip"><Check size={16} /> PerkJoy has this handled <span>4 steps confirmed</span></div>
           </div>
           <div className="floating-card floating-gift"><span><Gift size={18} /></span><div><small>REWARD DELIVERED</small><b>Employee choice · $50</b></div></div>
           <div className="floating-card floating-streak"><span><HeartHandshake size={18} /></span><div><small>MOMENTS HANDLED</small><b>12 celebrations on track</b></div></div>
+        </div>
+      </section>
+
+      <section className="phase-a-promise" aria-label="PerkJoy promise">
+        <div className="shell">
+          <p>You hire the people. <strong>PerkJoy remembers the moments.</strong></p>
+          <div><span>Remember</span><ArrowRight size={14} /><span>Personalize</span><ArrowRight size={14} /><span>Celebrate</span><ArrowRight size={14} /><span>Deliver</span></div>
         </div>
       </section>
 
@@ -108,12 +115,12 @@ export function MarketingHome() {
         <div className="dashboard-preview">
           <aside><Logo /><div className="preview-nav"><b>Overview</b><span>Employees</span><span>Celebrations</span><span>Rewards</span><span>PerkJoy Local</span></div></aside>
           <div className="preview-main">
-            <div className="preview-title"><div><h3>Good morning, Taylor 👋</h3><p>Here&apos;s what&apos;s happening with your team.</p></div><button>+ Recognize someone</button></div>
-            <div className="preview-kpis"><span><small>UPCOMING</small><b>8</b><em>Next 30 days</em></span><span><small>REWARDS SENT</small><b>12</b><em>This month</em></span><span><small>RECOGNITION SPEND</small><b>$425</b><em>of $500 budget</em></span></div>
-            <div className="preview-list"><div className="preview-list-head"><b>Upcoming celebrations</b><small>View calendar →</small></div>
-              <div><span className="avatar avatar-coral">SJ</span><p><b>Sarah Johnson</b><small>Birthday · Tomorrow</small></p><em className="pill coral-pill">$50 scheduled</em></div>
-              <div><span className="avatar avatar-gold">MB</span><p><b>Marcus Brown</b><small>3 year anniversary · Aug 14</small></p><em className="pill gold-pill">Cake scheduled</em></div>
-              <div><span className="avatar avatar-green">AW</span><p><b>Angela White</b><small>Birthday · Aug 18</small></p><em className="pill gray-pill">Choose reward</em></div>
+            <div className="preview-title"><div><h3>PerkJoy has this handled.</h3><p>You hire the people. PerkJoy remembers the moments.</p></div><button>+ Celebrate Someone</button></div>
+            <div className="preview-kpis"><span><small>MOMENTS HANDLED</small><b>3</b><em>Every detail confirmed</em></span><span><small>NEEDS ATTENTION</small><b>1</b><em>One quick decision</em></span><span><small>CELEBRATION HEALTH</small><b>75%</b><em>3 of 4 on track</em></span></div>
+            <div className="preview-list"><div className="preview-list-head"><b>What&apos;s Coming Up</b><small>Open calendar →</small></div>
+              <div><span className="avatar avatar-coral">SJ</span><p><b>Sarah Johnson</b><small>Birthday · Tomorrow</small></p><em className="pill handled-pill">Handled</em></div>
+              <div><span className="avatar avatar-gold">MB</span><p><b>Marcus Brown</b><small>5 year anniversary · Aug 14</small></p><em className="pill scheduled-pill">Scheduled</em></div>
+              <div><span className="avatar avatar-green">NW</span><p><b>Nicole Williams</b><small>Birthday · In 5 days</small></p><em className="pill attention-pill">Needs Attention</em></div>
             </div>
           </div>
         </div>
