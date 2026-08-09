@@ -22,6 +22,7 @@ import {
   organizations,
   recommendations,
   rewards,
+  subscriptions,
   teamCelebrations,
   teamCelebrationParticipants,
   vendorAvailability,
@@ -56,16 +57,17 @@ const celebrationCatalog = [
 async function ensureProducts() {
   const db = getDb();
   const catalog = [
-    { id: "demo-cake", vendorName: "Demo Philadelphia Bakery", name: "Chocolate Celebration Cake", description: "A six-inch chocolate cake with joyful buttercream and a handwritten card.", category: "Cakes & Treats", priceCents: 4900, deliveryFeeCents: 1200, servesPeople: 10, demo: true },
-    { id: "demo-cupcakes", vendorName: "Demo Philadelphia Bakery", name: "Office Birthday Cupcakes", description: "Twenty-four confetti cupcakes with a personalized celebration card.", category: "Cakes & Treats", priceCents: 8900, deliveryFeeCents: 1200, servesPeople: 24, demo: true },
-    { id: "demo-box", vendorName: "Demo Philadelphia Confectioner", name: "Team Treat Box", description: "Cookies, brownies, and locally made sweets packed for sharing.", category: "Gift Boxes", priceCents: 5600, deliveryFeeCents: 900, servesPeople: 8, demo: true },
-    { id: "demo-flowers", vendorName: "Demo Philadelphia Florist", name: "Bright Day Bouquet", description: "Seasonal flowers arranged for a desk, home office, or celebration table.", category: "Flowers", priceCents: 6200, deliveryFeeCents: 1400, servesPeople: 1, demo: true },
-    { id: "demo-lunch", vendorName: "Demo Philadelphia Kitchen", name: "Team Lunch Spread", description: "A flexible team lunch with salads, sandwiches, dessert, and delivery.", category: "Food & Lunch", priceCents: 14900, deliveryFeeCents: 1800, servesPeople: 12, demo: true },
-    { id: "demo-coffee", vendorName: "Demo Philadelphia Roaster", name: "Coffee & Pastry Drop", description: "Fresh coffee and pastries delivered for a warm team welcome.", category: "Coffee", priceCents: 7400, deliveryFeeCents: 1100, servesPeople: 8, demo: true },
+    { id: "demo-cake", vendorName: "Demo Philadelphia Bakery", name: "Chocolate Celebration Cake", description: "A six-inch chocolate cake with joyful buttercream and a handwritten card.", category: "Cakes & Treats", priceCents: 4900, deliveryFeeCents: 1200, servesPeople: 10, demo: true, vendorCostCents: 2900, deliveryCostCents: 900, platformFeeCents: 1100 },
+    { id: "demo-cupcakes", vendorName: "Demo Philadelphia Bakery", name: "Office Birthday Cupcakes", description: "Twenty-four confetti cupcakes with a personalized celebration card.", category: "Cakes & Treats", priceCents: 8900, deliveryFeeCents: 1200, servesPeople: 24, demo: true, vendorCostCents: 5700, deliveryCostCents: 900, platformFeeCents: 2300 },
+    { id: "demo-box", vendorName: "Demo Philadelphia Confectioner", name: "Team Treat Box", description: "Cookies, brownies, and locally made sweets packed for sharing.", category: "Gift Boxes", priceCents: 5600, deliveryFeeCents: 900, servesPeople: 8, demo: true, vendorCostCents: 3500, deliveryCostCents: 700, platformFeeCents: 1400 },
+    { id: "demo-flowers", vendorName: "Demo Philadelphia Florist", name: "Bright Day Bouquet", description: "Seasonal flowers arranged for a desk, home office, or celebration table.", category: "Flowers", priceCents: 6200, deliveryFeeCents: 1400, servesPeople: 1, demo: true, vendorCostCents: 3800, deliveryCostCents: 1000, platformFeeCents: 1400 },
+    { id: "demo-lunch", vendorName: "Demo Philadelphia Kitchen", name: "Team Lunch Spread", description: "A flexible team lunch with salads, sandwiches, dessert, and delivery.", category: "Food & Lunch", priceCents: 14900, deliveryFeeCents: 1800, servesPeople: 12, demo: true, vendorCostCents: 9800, deliveryCostCents: 1300, platformFeeCents: 3800 },
+    { id: "demo-coffee", vendorName: "Demo Philadelphia Roaster", name: "Coffee & Pastry Drop", description: "Fresh coffee and pastries delivered for a warm team welcome.", category: "Coffee", priceCents: 7400, deliveryFeeCents: 1100, servesPeople: 8, demo: true, vendorCostCents: 4700, deliveryCostCents: 800, platformFeeCents: 1900 },
   ];
   const existing = await db.select({ id: vendorProducts.id }).from(vendorProducts);
   const missing = catalog.filter((product) => !existing.some((item) => item.id === product.id));
   if (missing.length) await db.insert(vendorProducts).values(missing);
+  for (const product of catalog.filter((item) => existing.some((row) => row.id === item.id))) await db.update(vendorProducts).set({ vendorCostCents: product.vendorCostCents, deliveryCostCents: product.deliveryCostCents, platformFeeCents: product.platformFeeCents }).where(eq(vendorProducts.id, product.id));
 }
 
 async function ensureDifferentiationData(organizationId: string) {
@@ -222,12 +224,13 @@ async function ensureDifferentiationData(organizationId: string) {
     { id: `${organizationId}:policy:physical`, organizationId, name: "Physical gifts", rewardType: "local", minimumCents: 0, maximumCents: null, approvalLevel: "admin", active: true, createdAt },
   ]);
 
-  const existingConcierge = await db.select().from(conciergeRequests).where(eq(conciergeRequests.organizationId, organizationId)).limit(1);
+  const existingConcierge = await db.select().from(conciergeRequests).where(eq(conciergeRequests.organizationId, organizationId));
   if (!existingConcierge.length) {
     const nicole = employeeRows.find((employee) => employee.firstName === "Nicole") ?? employeeRows[0]; const conciergeId = `${organizationId}:concierge:nicole`;
-    await db.insert(conciergeRequests).values({ id: conciergeId, organizationId, employeeId: nicole.id, occasion: "Birthday", budgetCents: 12500, deliveryDate: daysFromNow(10), status: "awaiting_approval", recommendation: JSON.stringify({ title: "Birthday table surprise", summary: "Chocolate cake, bright bouquet, personalized card, and coordinated delivery.", amountCents: 11900 }), createdAt });
+    await db.insert(conciergeRequests).values({ id: conciergeId, organizationId, employeeId: nicole.id, occasion: "Birthday", budgetCents: 12500, deliveryDate: daysFromNow(10), status: "awaiting_approval", recommendation: JSON.stringify({ title: "Birthday table surprise", summary: "Chocolate cake, bright bouquet, personalized card, and coordinated delivery.", amountCents: 11900 }), serviceFeeCents: 4900, createdAt });
     await db.insert(approvalRequests).values({ id: `${organizationId}:approval:concierge`, organizationId, entityType: "concierge_request", entityId: conciergeId, approvalLevel: "admin", amountCents: 11900, status: "pending", createdAt });
   }
+  for (const request of existingConcierge.filter((item) => item.serviceFeeCents === 0)) await db.update(conciergeRequests).set({ serviceFeeCents: 4900 }).where(eq(conciergeRequests.id, request.id));
 
   const existingTeamCelebrations = await db.select().from(teamCelebrations).where(eq(teamCelebrations.organizationId, organizationId)).limit(1);
   if (!existingTeamCelebrations.length) {
@@ -276,6 +279,8 @@ async function ensureWorkspace(ownerId: string) {
 
   await ensureProducts();
   await ensureDifferentiationData(organization.id);
+  const [subscription] = await db.select().from(subscriptions).where(eq(subscriptions.organizationId, organization.id)).limit(1);
+  if (!subscription) await db.insert(subscriptions).values({ id: crypto.randomUUID(), organizationId: organization.id, plan: "Growth", status: "active", monthlyRecurringRevenueCents: 7900, createdAt });
   return organization;
 }
 
@@ -307,7 +312,7 @@ async function workspace(organizationId: string) {
   ]);
   const marketplaceProducts = productRows.flatMap((product) => {
     const listing = listingRows.find((item) => item.productId === product.id); const availability = availabilityRows.find((item) => item.id === listing?.vendorAvailabilityId);
-    return listing && availability ? [{ ...product, marketId: listing.marketId, rating: listing.ratingTenths / 10, minimumNoticeHours: availability.minimumNoticeHours, availableDays: JSON.parse(availability.availableDays), blackoutDates: JSON.parse(availability.blackoutDates), fulfillmentMethod: availability.fulfillmentMethod, preferenceTags: JSON.parse(listing.preferenceTags) }] : [];
+    return listing && availability ? [{ id: product.id, vendorName: product.vendorName, name: product.name, description: product.description, category: product.category, priceCents: product.priceCents, deliveryFeeCents: product.deliveryFeeCents, servesPeople: product.servesPeople, demo: product.demo, marketId: listing.marketId, rating: listing.ratingTenths / 10, minimumNoticeHours: availability.minimumNoticeHours, availableDays: JSON.parse(availability.availableDays), blackoutDates: JSON.parse(availability.blackoutDates), fulfillmentMethod: availability.fulfillmentMethod, preferenceTags: JSON.parse(listing.preferenceTags) }] : [];
   });
   const marketplaceMatches = Object.fromEntries(employeeRows.map((employee) => {
     const preference = preferenceRows.find((item) => item.employeeId === employee.id); if (!preference) return [employee.id, []];
@@ -321,7 +326,8 @@ async function workspace(organizationId: string) {
       privacyMode: profile.privacyMode, workMode: profile.workMode, preferredDelivery: profile.preferredDelivery,
     })), markets: marketRows, organizationLocations: locationRows, employeeLocations: employeeLocationRows.map((item) => ({ employeeId: item.employeeId, organizationLocationId: item.organizationLocationId })), marketplaceMatches,
     bundles: bundleRows.map((bundle) => ({ ...bundle, items: bundleItemRows.filter((item) => item.bundleId === bundle.id) })),
-    recommendations: recommendationRows, giftHistory: giftHistoryRows, approvals: approvalRows, approvalPolicies: policyRows, conciergeRequests: conciergeRows,
+    recommendations: recommendationRows, giftHistory: giftHistoryRows, approvals: approvalRows, approvalPolicies: policyRows,
+    conciergeRequests: conciergeRows.map((request) => ({ id: request.id, employeeId: request.employeeId, occasion: request.occasion, budgetCents: request.budgetCents, deliveryDate: request.deliveryDate, status: request.status, recommendation: request.recommendation })),
     teamCelebrations: teamRows.map((celebration) => ({ ...celebration, participantEmployeeIds: teamParticipantRows.filter((item) => item.teamCelebrationId === celebration.id).map((item) => item.employeeId) })),
   };
 }
@@ -463,7 +469,7 @@ export async function POST(request: Request) {
       if (!employee) return Response.json({ error: "Employee not found." }, { status: 404 });
       const id = crypto.randomUUID(); const budgetCents = Number(payload.budgetCents ?? 0);
       if (budgetCents < 2500 || budgetCents > 250000) return Response.json({ error: "Choose a concierge budget between $25 and $2,500." }, { status: 400 });
-      await db.insert(conciergeRequests).values({ id, organizationId: organization.id, employeeId, occasion: String(payload.occasion ?? "Custom Celebration"), budgetCents, deliveryDate: String(payload.deliveryDate ?? daysFromNow(7)), status: "submitted", recommendation: null, createdAt });
+      await db.insert(conciergeRequests).values({ id, organizationId: organization.id, employeeId, occasion: String(payload.occasion ?? "Custom Celebration"), budgetCents, deliveryDate: String(payload.deliveryDate ?? daysFromNow(7)), status: "submitted", recommendation: null, serviceFeeCents: 4900, createdAt });
       await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "concierge.submitted", entityType: "concierge_request", entityId: id, createdAt });
     } else if (payload.action === "toggleRule") {
       const ruleId = String(payload.ruleId ?? ""); const [rule] = await db.select().from(automationRules).where(and(eq(automationRules.id, ruleId), eq(automationRules.organizationId, organization.id))).limit(1);

@@ -75,7 +75,22 @@ export const vendorProducts = sqliteTable("vendor_products", {
   deliveryFeeCents: integer("delivery_fee_cents").notNull(),
   servesPeople: integer("serves_people").notNull(),
   demo: integer("demo", { mode: "boolean" }).notNull().default(true),
+  vendorCostCents: integer("vendor_cost_cents").notNull().default(0),
+  deliveryCostCents: integer("delivery_cost_cents").notNull().default(0),
+  platformFeeCents: integer("platform_fee_cents").notNull().default(0),
 });
+
+export const subscriptions = sqliteTable("subscriptions", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  plan: text("plan").notNull(),
+  status: text("status", { enum: ["trial", "active", "past_due", "cancelled"] }).notNull().default("trial"),
+  monthlyRecurringRevenueCents: integer("monthly_recurring_revenue_cents").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("subscriptions_organization_unique").on(table.organizationId),
+  index("idx_subscriptions_status").on(table.status),
+]);
 
 export const localOrders = sqliteTable("local_orders", {
   id: text("id").primaryKey(),
@@ -282,6 +297,7 @@ export const conciergeRequests = sqliteTable("concierge_requests", {
   deliveryDate: text("delivery_date").notNull(),
   status: text("status", { enum: ["submitted", "planning", "recommendation_ready", "awaiting_approval", "approved", "ordered", "delivered"] }).notNull().default("submitted"),
   recommendation: text("recommendation"),
+  serviceFeeCents: integer("service_fee_cents").notNull().default(0),
   createdAt: text("created_at").notNull(),
 }, (table) => [index("idx_concierge_org_status").on(table.organizationId, table.status)]);
 

@@ -25,7 +25,10 @@ const runtimeSchema = [
   `CREATE INDEX IF NOT EXISTS idx_rewards_org_created ON rewards (organization_id,created_at)`,
   `CREATE TABLE IF NOT EXISTS reward_provider_events (id text PRIMARY KEY NOT NULL, provider text NOT NULL, provider_event_id text NOT NULL, payload text NOT NULL, processed_at text, created_at text NOT NULL)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS provider_events_provider_id_unique ON reward_provider_events (provider,provider_event_id)`,
-  `CREATE TABLE IF NOT EXISTS vendor_products (id text PRIMARY KEY NOT NULL, vendor_name text NOT NULL, name text NOT NULL, description text NOT NULL, category text NOT NULL, price_cents integer NOT NULL, delivery_fee_cents integer NOT NULL, serves_people integer NOT NULL, demo integer DEFAULT true NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS vendor_products (id text PRIMARY KEY NOT NULL, vendor_name text NOT NULL, name text NOT NULL, description text NOT NULL, category text NOT NULL, price_cents integer NOT NULL, delivery_fee_cents integer NOT NULL, serves_people integer NOT NULL, demo integer DEFAULT true NOT NULL, vendor_cost_cents integer DEFAULT 0 NOT NULL, delivery_cost_cents integer DEFAULT 0 NOT NULL, platform_fee_cents integer DEFAULT 0 NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS subscriptions (id text PRIMARY KEY NOT NULL, organization_id text NOT NULL REFERENCES organizations(id) ON DELETE cascade, plan text NOT NULL, status text DEFAULT 'trial' NOT NULL, monthly_recurring_revenue_cents integer DEFAULT 0 NOT NULL, created_at text NOT NULL)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_organization_unique ON subscriptions (organization_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions (status)`,
   `CREATE TABLE IF NOT EXISTS local_orders (id text PRIMARY KEY NOT NULL, organization_id text NOT NULL REFERENCES organizations(id) ON DELETE cascade, employee_id text NOT NULL REFERENCES employees(id), product_id text NOT NULL REFERENCES vendor_products(id), delivery_date text NOT NULL, total_cents integer NOT NULL, status text DEFAULT 'paid' NOT NULL, created_at text NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS idx_local_orders_org_created ON local_orders (organization_id,created_at)`,
   `CREATE TABLE IF NOT EXISTS audit_logs (id text PRIMARY KEY NOT NULL, organization_id text NOT NULL REFERENCES organizations(id) ON DELETE cascade, actor_id text NOT NULL, action text NOT NULL, entity_type text NOT NULL, entity_id text NOT NULL, metadata text DEFAULT '{}' NOT NULL, created_at text NOT NULL)`,
@@ -65,7 +68,7 @@ const runtimeSchema = [
   `CREATE INDEX IF NOT EXISTS idx_approvals_org_status ON approval_requests (organization_id,status)`,
   `CREATE TABLE IF NOT EXISTS approval_policies (id text PRIMARY KEY NOT NULL, organization_id text NOT NULL REFERENCES organizations(id) ON DELETE cascade, name text NOT NULL, reward_type text NOT NULL, minimum_cents integer DEFAULT 0 NOT NULL, maximum_cents integer, approval_level text NOT NULL, active integer DEFAULT true NOT NULL, created_at text NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS idx_approval_policies_org_active ON approval_policies (organization_id,active)`,
-  `CREATE TABLE IF NOT EXISTS concierge_requests (id text PRIMARY KEY NOT NULL, organization_id text NOT NULL REFERENCES organizations(id) ON DELETE cascade, employee_id text NOT NULL REFERENCES employees(id) ON DELETE restrict, occasion text NOT NULL, budget_cents integer NOT NULL, delivery_date text NOT NULL, status text DEFAULT 'submitted' NOT NULL, recommendation text, created_at text NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS concierge_requests (id text PRIMARY KEY NOT NULL, organization_id text NOT NULL REFERENCES organizations(id) ON DELETE cascade, employee_id text NOT NULL REFERENCES employees(id) ON DELETE restrict, occasion text NOT NULL, budget_cents integer NOT NULL, delivery_date text NOT NULL, status text DEFAULT 'submitted' NOT NULL, recommendation text, service_fee_cents integer DEFAULT 0 NOT NULL, created_at text NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS idx_concierge_org_status ON concierge_requests (organization_id,status)`,
   `CREATE TABLE IF NOT EXISTS team_celebrations (id text PRIMARY KEY NOT NULL, organization_id text NOT NULL REFERENCES organizations(id) ON DELETE cascade, title text NOT NULL, event_type text NOT NULL, event_date text NOT NULL, department text, reward_mode text NOT NULL, budget_cents integer DEFAULT 0 NOT NULL, status text DEFAULT 'planned' NOT NULL, created_at text NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS idx_team_celebrations_org_date ON team_celebrations (organization_id,event_date)`,
@@ -82,4 +85,15 @@ const runtimeSchema = [
 export async function ensureDb() {
   if (!env.DB) throw new Error("Cloudflare D1 binding `DB` is unavailable.");
   await env.DB.batch(runtimeSchema.map((statement) => env.DB.prepare(statement)));
+  const requiredColumns = [
+    ["vendor_products", "vendor_cost_cents", "vendor_cost_cents integer DEFAULT 0 NOT NULL"],
+    ["vendor_products", "delivery_cost_cents", "delivery_cost_cents integer DEFAULT 0 NOT NULL"],
+    ["vendor_products", "platform_fee_cents", "platform_fee_cents integer DEFAULT 0 NOT NULL"],
+    ["concierge_requests", "service_fee_cents", "service_fee_cents integer DEFAULT 0 NOT NULL"],
+  ] as const;
+  for (const [table, column, definition] of requiredColumns) {
+    const info = await env.DB.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
+    if (!info.results.some((item) => item.name === column)) await env.DB.prepare(`ALTER TABLE ${table} ADD COLUMN ${definition}`).run();
+  }
+  await env.DB.prepare("PRAGMA optimize").run();
 }
