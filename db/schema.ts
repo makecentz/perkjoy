@@ -261,6 +261,18 @@ export const approvalRequests = sqliteTable("approval_requests", {
   createdAt: text("created_at").notNull(),
 }, (table) => [index("idx_approvals_org_status").on(table.organizationId, table.status)]);
 
+export const approvalPolicies = sqliteTable("approval_policies", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  rewardType: text("reward_type").notNull(),
+  minimumCents: integer("minimum_cents").notNull().default(0),
+  maximumCents: integer("maximum_cents"),
+  approvalLevel: text("approval_level", { enum: ["automatic", "manager", "admin", "owner"] }).notNull(),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull(),
+}, (table) => [index("idx_approval_policies_org_active").on(table.organizationId, table.active)]);
+
 export const conciergeRequests = sqliteTable("concierge_requests", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
@@ -285,6 +297,16 @@ export const teamCelebrations = sqliteTable("team_celebrations", {
   status: text("status").notNull().default("planned"),
   createdAt: text("created_at").notNull(),
 }, (table) => [index("idx_team_celebrations_org_date").on(table.organizationId, table.eventDate)]);
+
+export const teamCelebrationParticipants = sqliteTable("team_celebration_participants", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  teamCelebrationId: text("team_celebration_id").notNull().references(() => teamCelebrations.id, { onDelete: "cascade" }),
+  employeeId: text("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+}, (table) => [
+  uniqueIndex("team_celebration_participant_unique").on(table.teamCelebrationId, table.employeeId),
+  index("idx_team_participants_employee").on(table.employeeId),
+]);
 
 export const vendorAvailability = sqliteTable("vendor_availability", {
   id: text("id").primaryKey(),

@@ -167,6 +167,16 @@ export type ApprovalRequest = {
   status: "pending" | "approved" | "rejected";
 };
 
+export type ApprovalPolicy = {
+  id: string;
+  name: string;
+  rewardType: string;
+  minimumCents: number;
+  maximumCents: number | null;
+  approvalLevel: "automatic" | "manager" | "admin" | "owner";
+  active: boolean;
+};
+
 export type ConciergeRequest = {
   id: string;
   employeeId: string;
@@ -186,6 +196,7 @@ export type TeamCelebration = {
   rewardMode: "individual" | "team_experience";
   budgetCents: number;
   status: string;
+  participantEmployeeIds: string[];
 };
 
 export type Workspace = {
@@ -206,6 +217,7 @@ export type Workspace = {
   recommendations: Recommendation[];
   giftHistory: GiftHistory[];
   approvals: ApprovalRequest[];
+  approvalPolicies: ApprovalPolicy[];
   conciergeRequests: ConciergeRequest[];
   teamCelebrations: TeamCelebration[];
 };

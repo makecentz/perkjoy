@@ -2,6 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { ensureDb, getDb } from "@/db";
 import {
   approvalRequests,
+  approvalPolicies,
   auditLogs,
   automationRules,
   bundleItems,
@@ -22,6 +23,7 @@ import {
   recommendations,
   rewards,
   teamCelebrations,
+  teamCelebrationParticipants,
   vendorAvailability,
   vendorProducts,
 } from "@/db/schema";
@@ -53,16 +55,17 @@ const celebrationCatalog = [
 
 async function ensureProducts() {
   const db = getDb();
-  const existing = await db.select().from(vendorProducts).limit(1);
-  if (existing.length) return;
-  await db.insert(vendorProducts).values([
+  const catalog = [
     { id: "demo-cake", vendorName: "Demo Philadelphia Bakery", name: "Chocolate Celebration Cake", description: "A six-inch chocolate cake with joyful buttercream and a handwritten card.", category: "Cakes & Treats", priceCents: 4900, deliveryFeeCents: 1200, servesPeople: 10, demo: true },
     { id: "demo-cupcakes", vendorName: "Demo Philadelphia Bakery", name: "Office Birthday Cupcakes", description: "Twenty-four confetti cupcakes with a personalized celebration card.", category: "Cakes & Treats", priceCents: 8900, deliveryFeeCents: 1200, servesPeople: 24, demo: true },
     { id: "demo-box", vendorName: "Demo Philadelphia Confectioner", name: "Team Treat Box", description: "Cookies, brownies, and locally made sweets packed for sharing.", category: "Gift Boxes", priceCents: 5600, deliveryFeeCents: 900, servesPeople: 8, demo: true },
     { id: "demo-flowers", vendorName: "Demo Philadelphia Florist", name: "Bright Day Bouquet", description: "Seasonal flowers arranged for a desk, home office, or celebration table.", category: "Flowers", priceCents: 6200, deliveryFeeCents: 1400, servesPeople: 1, demo: true },
     { id: "demo-lunch", vendorName: "Demo Philadelphia Kitchen", name: "Team Lunch Spread", description: "A flexible team lunch with salads, sandwiches, dessert, and delivery.", category: "Food & Lunch", priceCents: 14900, deliveryFeeCents: 1800, servesPeople: 12, demo: true },
     { id: "demo-coffee", vendorName: "Demo Philadelphia Roaster", name: "Coffee & Pastry Drop", description: "Fresh coffee and pastries delivered for a warm team welcome.", category: "Coffee", priceCents: 7400, deliveryFeeCents: 1100, servesPeople: 8, demo: true },
-  ]);
+  ];
+  const existing = await db.select({ id: vendorProducts.id }).from(vendorProducts);
+  const missing = catalog.filter((product) => !existing.some((item) => item.id === product.id));
+  if (missing.length) await db.insert(vendorProducts).values(missing);
 }
 
 async function ensureDifferentiationData(organizationId: string) {
@@ -85,9 +88,8 @@ async function ensureDifferentiationData(organizationId: string) {
 
   const existingTypes = await db.select().from(celebrationTypes).where(eq(celebrationTypes.organizationId, organizationId)).limit(1);
   if (!existingTypes.length) {
-    await db.insert(celebrationTypes).values(celebrationCatalog.map(([name, slug, category, manualOnly]) => ({
-      id: `${organizationId}:${slug}`, organizationId, name, slug, category, manualOnly, active: true, createdAt,
-    })));
+    const typeRows = celebrationCatalog.map(([name, slug, category, manualOnly]) => ({ id: `${organizationId}:${slug}`, organizationId, name, slug, category, manualOnly, active: true, createdAt }));
+    for (let index = 0; index < typeRows.length; index += 10) await db.insert(celebrationTypes).values(typeRows.slice(index, index + 10));
   }
 
   const existingProfiles = await db.select().from(celebrationProfiles).where(eq(celebrationProfiles.organizationId, organizationId));
@@ -154,6 +156,9 @@ async function ensureDifferentiationData(organizationId: string) {
       { id: "bundle-team-celebration", marketId: "market-philadelphia", vendorName: "Demo Philadelphia Kitchen", name: "Team Celebration", description: "Lunch, dessert, celebration card, and delivery.", category: "Team", customerPriceCents: 14900, active: true },
       { id: "bundle-big-win", marketId: "market-philadelphia", vendorName: "PerkJoy Fulfillment", name: "Big Win", description: "Team lunch, dessert, and a celebration package.", category: "Achievement", customerPriceCents: 24900, active: true },
     ]);
+  }
+  const existingBundleItems = await db.select().from(bundleItems).limit(1);
+  if (!existingBundleItems.length) {
     await db.insert(bundleItems).values([
       { id: crypto.randomUUID(), bundleId: "bundle-birthday-surprise", productId: "demo-cake", name: "Chocolate cake", quantity: 1 },
       { id: crypto.randomUUID(), bundleId: "bundle-birthday-surprise", productId: null, name: "Personalized card", quantity: 1 },
@@ -209,9 +214,35 @@ async function ensureDifferentiationData(organizationId: string) {
     ]);
   }
 
+  const existingPolicies = await db.select().from(approvalPolicies).where(eq(approvalPolicies.organizationId, organizationId)).limit(1);
+  if (!existingPolicies.length) await db.insert(approvalPolicies).values([
+    { id: `${organizationId}:policy:digital-auto`, organizationId, name: "Digital rewards under $50", rewardType: "digital", minimumCents: 0, maximumCents: 4999, approvalLevel: "automatic", active: true, createdAt },
+    { id: `${organizationId}:policy:manager`, organizationId, name: "$50–$100 celebrations", rewardType: "any", minimumCents: 5000, maximumCents: 10000, approvalLevel: "manager", active: true, createdAt },
+    { id: `${organizationId}:policy:admin`, organizationId, name: "Celebrations over $100", rewardType: "any", minimumCents: 10001, maximumCents: null, approvalLevel: "admin", active: true, createdAt },
+    { id: `${organizationId}:policy:physical`, organizationId, name: "Physical gifts", rewardType: "local", minimumCents: 0, maximumCents: null, approvalLevel: "admin", active: true, createdAt },
+  ]);
+
+  const existingConcierge = await db.select().from(conciergeRequests).where(eq(conciergeRequests.organizationId, organizationId)).limit(1);
+  if (!existingConcierge.length) {
+    const nicole = employeeRows.find((employee) => employee.firstName === "Nicole") ?? employeeRows[0]; const conciergeId = `${organizationId}:concierge:nicole`;
+    await db.insert(conciergeRequests).values({ id: conciergeId, organizationId, employeeId: nicole.id, occasion: "Birthday", budgetCents: 12500, deliveryDate: daysFromNow(10), status: "awaiting_approval", recommendation: JSON.stringify({ title: "Birthday table surprise", summary: "Chocolate cake, bright bouquet, personalized card, and coordinated delivery.", amountCents: 11900 }), createdAt });
+    await db.insert(approvalRequests).values({ id: `${organizationId}:approval:concierge`, organizationId, entityType: "concierge_request", entityId: conciergeId, approvalLevel: "admin", amountCents: 11900, status: "pending", createdAt });
+  }
+
   const existingTeamCelebrations = await db.select().from(teamCelebrations).where(eq(teamCelebrations.organizationId, organizationId)).limit(1);
   if (!existingTeamCelebrations.length) {
-    await db.insert(teamCelebrations).values({ id: `${organizationId}:team:launch`, organizationId, title: "Marketing Project Launch", eventType: "Team Achievement", eventDate: daysFromNow(12), department: "Marketing", rewardMode: "team_experience", budgetCents: 17500, status: "planned", createdAt });
+    const teamId = `${organizationId}:team:launch`;
+    await db.insert(teamCelebrations).values({ id: teamId, organizationId, title: "Marketing Project Launch", eventType: "Team Achievement", eventDate: daysFromNow(12), department: "Marketing", rewardMode: "team_experience", budgetCents: 17500, status: "approval_required", createdAt });
+    await db.insert(teamCelebrationParticipants).values(employeeRows.slice(0,3).map((employee) => ({ id: crypto.randomUUID(), organizationId, teamCelebrationId: teamId, employeeId: employee.id })));
+    await db.insert(approvalRequests).values({ id: `${organizationId}:approval:team-launch`, organizationId, entityType: "team_celebration", entityId: teamId, approvalLevel: "admin", amountCents: 17500, status: "pending", createdAt });
+  }
+  const [teamRow] = await db.select().from(teamCelebrations).where(eq(teamCelebrations.organizationId, organizationId)).limit(1);
+  const existingParticipants = await db.select().from(teamCelebrationParticipants).where(eq(teamCelebrationParticipants.organizationId, organizationId)).limit(1);
+  if (teamRow && !existingParticipants.length) await db.insert(teamCelebrationParticipants).values(employeeRows.slice(0,3).map((employee) => ({ id: crypto.randomUUID(), organizationId, teamCelebrationId: teamRow.id, employeeId: employee.id })));
+  const existingTeamApproval = teamRow ? await db.select().from(approvalRequests).where(and(eq(approvalRequests.organizationId, organizationId), eq(approvalRequests.entityType, "team_celebration"), eq(approvalRequests.entityId, teamRow.id))).limit(1) : [];
+  if (teamRow && !existingTeamApproval.length) {
+    await db.update(teamCelebrations).set({ status: "approval_required" }).where(eq(teamCelebrations.id, teamRow.id));
+    await db.insert(approvalRequests).values({ id: crypto.randomUUID(), organizationId, entityType: "team_celebration", entityId: teamRow.id, approvalLevel: "admin", amountCents: teamRow.budgetCents, status: "pending", createdAt });
   }
 }
 
@@ -251,7 +282,7 @@ async function ensureWorkspace(ownerId: string) {
 async function workspace(organizationId: string) {
   const db = getDb();
   const [organization] = await db.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
-  const [employeeRows, ruleRows, rewardRows, productRows, orderRows, typeRows, eventRows, profileRows, preferenceRows, marketRows, locationRows, employeeLocationRows, availabilityRows, listingRows, bundleRows, bundleItemRows, recommendationRows, giftHistoryRows, approvalRows, conciergeRows, teamRows] = await Promise.all([
+  const [employeeRows, ruleRows, rewardRows, productRows, orderRows, typeRows, eventRows, profileRows, preferenceRows, marketRows, locationRows, employeeLocationRows, availabilityRows, listingRows, bundleRows, bundleItemRows, recommendationRows, giftHistoryRows, approvalRows, policyRows, conciergeRows, teamRows, teamParticipantRows] = await Promise.all([
     db.select().from(employees).where(eq(employees.organizationId, organizationId)).orderBy(employees.firstName),
     db.select().from(automationRules).where(eq(automationRules.organizationId, organizationId)).orderBy(automationRules.createdAt),
     db.select().from(rewards).where(eq(rewards.organizationId, organizationId)).orderBy(desc(rewards.createdAt)),
@@ -269,8 +300,10 @@ async function workspace(organizationId: string) {
     db.select().from(recommendations).where(eq(recommendations.organizationId, organizationId)).orderBy(desc(recommendations.recommendationScore)),
     db.select().from(giftHistory).where(eq(giftHistory.organizationId, organizationId)).orderBy(desc(giftHistory.createdAt)),
     db.select().from(approvalRequests).where(eq(approvalRequests.organizationId, organizationId)).orderBy(desc(approvalRequests.createdAt)),
+    db.select().from(approvalPolicies).where(eq(approvalPolicies.organizationId, organizationId)).orderBy(approvalPolicies.minimumCents),
     db.select().from(conciergeRequests).where(eq(conciergeRequests.organizationId, organizationId)).orderBy(desc(conciergeRequests.createdAt)),
     db.select().from(teamCelebrations).where(eq(teamCelebrations.organizationId, organizationId)).orderBy(teamCelebrations.eventDate),
+    db.select().from(teamCelebrationParticipants).where(eq(teamCelebrationParticipants.organizationId, organizationId)),
   ]);
   const marketplaceProducts = productRows.flatMap((product) => {
     const listing = listingRows.find((item) => item.productId === product.id); const availability = availabilityRows.find((item) => item.id === listing?.vendorAvailabilityId);
@@ -288,7 +321,8 @@ async function workspace(organizationId: string) {
       privacyMode: profile.privacyMode, workMode: profile.workMode, preferredDelivery: profile.preferredDelivery,
     })), markets: marketRows, organizationLocations: locationRows, employeeLocations: employeeLocationRows.map((item) => ({ employeeId: item.employeeId, organizationLocationId: item.organizationLocationId })), marketplaceMatches,
     bundles: bundleRows.map((bundle) => ({ ...bundle, items: bundleItemRows.filter((item) => item.bundleId === bundle.id) })),
-    recommendations: recommendationRows, giftHistory: giftHistoryRows, approvals: approvalRows, conciergeRequests: conciergeRows, teamCelebrations: teamRows,
+    recommendations: recommendationRows, giftHistory: giftHistoryRows, approvals: approvalRows, approvalPolicies: policyRows, conciergeRequests: conciergeRows,
+    teamCelebrations: teamRows.map((celebration) => ({ ...celebration, participantEmployeeIds: teamParticipantRows.filter((item) => item.teamCelebrationId === celebration.id).map((item) => item.employeeId) })),
   };
 }
 
@@ -390,7 +424,40 @@ export async function POST(request: Request) {
       if (!approval) return Response.json({ error: "Approval request not found." }, { status: 404 });
       await db.update(approvalRequests).set({ status: "approved" }).where(eq(approvalRequests.id, approvalId));
       if (approval.entityType === "recommendation") await db.update(recommendations).set({ status: "approved" }).where(eq(recommendations.id, approval.entityId));
-      await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "reward.approved", entityType: approval.entityType, entityId: approval.entityId, metadata: JSON.stringify({ amountCents: approval.amountCents }), createdAt });
+      if (approval.entityType === "concierge_request") await db.update(conciergeRequests).set({ status: "approved" }).where(eq(conciergeRequests.id, approval.entityId));
+      if (approval.entityType === "team_celebration") await db.update(teamCelebrations).set({ status: "approved" }).where(eq(teamCelebrations.id, approval.entityId));
+      await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "approval.approved", entityType: approval.entityType, entityId: approval.entityId, metadata: JSON.stringify({ amountCents: approval.amountCents }), createdAt });
+    } else if (payload.action === "rejectRequest") {
+      const approvalId = String(payload.approvalId ?? ""); const [approval] = await db.select().from(approvalRequests).where(and(eq(approvalRequests.id, approvalId), eq(approvalRequests.organizationId, organization.id), eq(approvalRequests.status, "pending"))).limit(1);
+      if (!approval) return Response.json({ error: "Pending approval request not found." }, { status: 404 });
+      await db.update(approvalRequests).set({ status: "rejected" }).where(eq(approvalRequests.id, approvalId));
+      if (approval.entityType === "recommendation") await db.update(recommendations).set({ status: "rejected" }).where(eq(recommendations.id, approval.entityId));
+      if (approval.entityType === "concierge_request") await db.update(conciergeRequests).set({ status: "planning" }).where(eq(conciergeRequests.id, approval.entityId));
+      if (approval.entityType === "team_celebration") await db.update(teamCelebrations).set({ status: "changes_requested" }).where(eq(teamCelebrations.id, approval.entityId));
+      await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "approval.changes_requested", entityType: approval.entityType, entityId: approval.entityId, metadata: JSON.stringify({ amountCents: approval.amountCents }), createdAt });
+    } else if (payload.action === "toggleApprovalPolicy") {
+      const policyId = String(payload.policyId ?? ""); const [policy] = await db.select().from(approvalPolicies).where(and(eq(approvalPolicies.id, policyId), eq(approvalPolicies.organizationId, organization.id))).limit(1);
+      if (!policy) return Response.json({ error: "Approval policy not found." }, { status: 404 });
+      await db.update(approvalPolicies).set({ active: !policy.active }).where(eq(approvalPolicies.id, policyId));
+      await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "approval_policy.updated", entityType: "approval_policy", entityId: policyId, metadata: JSON.stringify({ active: !policy.active }), createdAt });
+    } else if (payload.action === "createTeamCelebration") {
+      const title = String(payload.title ?? "").trim(); const eventType = String(payload.eventType ?? "Team Achievement").trim(); const eventDate = String(payload.eventDate ?? "");
+      const rewardMode = String(payload.rewardMode ?? "team_experience") as "individual" | "team_experience"; const budgetCents = Number(payload.budgetCents ?? 0);
+      const participantIds = [...new Set(Array.isArray(payload.participantIds) ? payload.participantIds.map(String) : [])];
+      if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) return Response.json({ error: "Add a title and celebration date." }, { status: 400 });
+      if (!(["individual", "team_experience"] as string[]).includes(rewardMode) || budgetCents < 0 || budgetCents > 250000) return Response.json({ error: "Choose a valid reward type and budget up to $2,500." }, { status: 400 });
+      const organizationEmployees = await db.select().from(employees).where(eq(employees.organizationId, organization.id));
+      const validParticipantIds = participantIds.filter((id) => organizationEmployees.some((employee) => employee.id === id));
+      if (validParticipantIds.length < 2 || validParticipantIds.length !== participantIds.length) return Response.json({ error: "Choose at least two employees from your organization." }, { status: 400 });
+      const policies = await db.select().from(approvalPolicies).where(and(eq(approvalPolicies.organizationId, organization.id), eq(approvalPolicies.active, true)));
+      const rewardType = rewardMode === "team_experience" ? "local" : "digital";
+      const matches = policies.filter((policy) => (policy.rewardType === rewardType || policy.rewardType === "any") && budgetCents >= policy.minimumCents && (policy.maximumCents === null || budgetCents <= policy.maximumCents));
+      const policy = matches.find((item) => item.rewardType === rewardType) ?? matches.sort((a, b) => b.minimumCents - a.minimumCents)[0];
+      const approvalLevel = policy?.approvalLevel ?? "admin"; const id = crypto.randomUUID();
+      await db.insert(teamCelebrations).values({ id, organizationId: organization.id, title, eventType, eventDate, department: String(payload.department ?? "").trim() || null, rewardMode, budgetCents, status: approvalLevel === "automatic" ? "approved" : "approval_required", createdAt });
+      await db.insert(teamCelebrationParticipants).values(validParticipantIds.map((employeeId) => ({ id: crypto.randomUUID(), organizationId: organization.id, teamCelebrationId: id, employeeId })));
+      if (approvalLevel !== "automatic") await db.insert(approvalRequests).values({ id: crypto.randomUUID(), organizationId: organization.id, entityType: "team_celebration", entityId: id, approvalLevel, amountCents: budgetCents, status: "pending", createdAt });
+      await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "team_celebration.created", entityType: "team_celebration", entityId: id, metadata: JSON.stringify({ participants: validParticipantIds.length, approvalLevel }), createdAt });
     } else if (payload.action === "createConcierge") {
       const employeeId = String(payload.employeeId ?? ""); const [employee] = await db.select().from(employees).where(and(eq(employees.id, employeeId), eq(employees.organizationId, organization.id))).limit(1);
       if (!employee) return Response.json({ error: "Employee not found." }, { status: 404 });

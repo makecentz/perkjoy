@@ -29,6 +29,13 @@
       "when": 1786280614066,
       "tag": "0003_smart_squadron_supreme",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1786281466368,
+      "tag": "0004_elite_maggott",
+      "breakpoints": true
     }
   ]
 }
