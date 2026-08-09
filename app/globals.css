@@ -13,6 +13,12 @@
   --shadow: 0 22px 70px rgba(53, 42, 30, .10);
 }
 
+.sidebar-user > button { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; color: #94918b; border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
+.sidebar-user > button:hover { color: #a84d39; background: #fff0ea; }
+.sidebar-user > button:disabled { cursor: wait; opacity: .55; }
+.auth-form-card select { min-height: 42px; padding: 0 12px; border: 1px solid #dad7d0; border-radius: 9px; outline: 0; background: white; }
+.auth-form-card select:focus { border-color: #d97761; box-shadow: 0 0 0 3px rgba(243,111,85,.1); }
+
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body { margin: 0; color: var(--ink); background: #fff; font-family: var(--font-body), sans-serif; }

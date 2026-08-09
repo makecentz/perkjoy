@@ -1,69 +1,76 @@
-import { and, eq } from "drizzle-orm";
-import { ensureDb, getDb } from "@/db";
-import { auditLogs, celebrationPreferences, celebrationProfiles, employees, organizations } from "@/db/schema";
-import { allowedStrings, hashProfileToken, PROFILE_DIETARY, PROFILE_INTERESTS, PROFILE_REWARD_TYPES, PROFILE_SHIRT_SIZES, profileCompleteness } from "@/lib/celebration-profile";
+import { createClient } from "@supabase/supabase-js";
+import { allowedStrings, PROFILE_DIETARY, PROFILE_INTERESTS, PROFILE_REWARD_TYPES, PROFILE_SHIRT_SIZES, profileCompleteness } from "@/lib/celebration-profile";
+import type { Database, Json } from "@/lib/supabase/database.types";
+import { isServerSupabaseConfigured } from "@/lib/supabase/request";
+import { GET as getD1Profile, POST as updateD1Profile } from "./d1-route";
 
 type RouteContext = { params: Promise<{ token: string }> };
 
-async function invitation(token: string) {
-  if (!/^[A-Za-z0-9_-]{40,64}$/.test(token)) return null;
-  await ensureDb();
-  const db = getDb();
-  const [profile] = await db.select().from(celebrationProfiles).where(eq(celebrationProfiles.inviteTokenHash, await hashProfileToken(token))).limit(1);
-  if (!profile || new Date(profile.inviteExpiresAt).getTime() < Date.now()) return null;
-  const [employee] = await db.select().from(employees).where(and(eq(employees.id, profile.employeeId), eq(employees.organizationId, profile.organizationId))).limit(1);
-  const [organization] = await db.select().from(organizations).where(eq(organizations.id, profile.organizationId)).limit(1);
-  if (!employee || !organization) return null;
-  return { db, profile, employee, organization };
+function client() {
+  return createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
 }
-
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
+  if (!isServerSupabaseConfigured()) return getD1Profile(request, context);
   const { token } = await context.params;
-  const invite = await invitation(token);
-  if (!invite) return Response.json({ error: "This invitation has expired. Ask your company for a new link." }, { status: 404 });
-  const [preferences] = await invite.db.select().from(celebrationPreferences).where(and(eq(celebrationPreferences.employeeId, invite.employee.id), eq(celebrationPreferences.organizationId, invite.organization.id))).limit(1);
-  return Response.json({
-    firstName: invite.employee.firstName,
-    organizationName: invite.organization.name,
-    completeness: invite.profile.completeness,
-    privacyMode: invite.profile.privacyMode,
-    preferredDelivery: invite.profile.preferredDelivery,
-    preferences: preferences ? {
-      food: JSON.parse(preferences.food), rewards: JSON.parse(preferences.rewards), interests: JSON.parse(preferences.interests),
-      shirtSize: preferences.shirtSize ?? "", dietary: JSON.parse(preferences.dietary),
-    } : null,
-  }, { headers: { "Cache-Control": "no-store, private" } });
+  const { data, error } = await client().rpc("read_celebration_profile_invite", { p_token: token });
+  if (error) {
+    console.error("supabase_profile_invite_read_failed", error);
+    return Response.json({ error: "We couldn't open this invitation. Please ask for a fresh link." }, { status: 500 });
+  }
+  if (!data) return Response.json({ error: "This invitation has expired. Ask your company for a new link." }, { status: 404 });
+  return Response.json(data, { headers: { "Cache-Control": "no-store, private" } });
 }
 
 export async function POST(request: Request, context: RouteContext) {
+  if (!isServerSupabaseConfigured()) return updateD1Profile(request, context);
   const { token } = await context.params;
-  const invite = await invitation(token);
-  if (!invite) return Response.json({ error: "This invitation has expired. Ask your company for a new link." }, { status: 404 });
   let payload: Record<string, unknown>;
-  try { payload = await request.json() as Record<string, unknown>; }
-  catch { return Response.json({ error: "We couldn't read that profile. Please try again." }, { status: 400 }); }
-  const updatedAt = new Date().toISOString();
+  try {
+    payload = await request.json() as Record<string, unknown>;
+  } catch {
+    return Response.json({ error: "We couldn't read that profile. Please try again." }, { status: 400 });
+  }
+
   const food = {
-    cake: String(payload.favoriteCake ?? "").slice(0, 80), dessert: String(payload.favoriteDessert ?? "").slice(0, 80),
-    restaurant: String(payload.favoriteRestaurant ?? "").slice(0, 120), lunch: String(payload.favoriteLunch ?? "").slice(0, 100),
-    snack: String(payload.favoriteSnack ?? "").slice(0, 80), drink: String(payload.favoriteDrink ?? "").slice(0, 80),
+    cake: String(payload.favoriteCake ?? "").slice(0, 80),
+    dessert: String(payload.favoriteDessert ?? "").slice(0, 80),
+    restaurant: String(payload.favoriteRestaurant ?? "").slice(0, 120),
+    lunch: String(payload.favoriteLunch ?? "").slice(0, 100),
+    snack: String(payload.favoriteSnack ?? "").slice(0, 80),
+    drink: String(payload.favoriteDrink ?? "").slice(0, 80),
   };
-  const stores = Array.isArray(payload.favoriteStores) ? [...new Set(payload.favoriteStores.map((item) => String(item).trim().slice(0, 80)).filter(Boolean))].slice(0, 8) : [];
+  const stores = Array.isArray(payload.favoriteStores)
+    ? [...new Set(payload.favoriteStores.map((item) => String(item).trim().slice(0, 80)).filter(Boolean))].slice(0, 8)
+    : [];
   const rewards = { stores, types: allowedStrings(payload.rewardTypes, PROFILE_REWARD_TYPES, 6) };
   const interests = allowedStrings(payload.interests, PROFILE_INTERESTS, 12);
   const dietary = allowedStrings(payload.dietary, PROFILE_DIETARY, 6);
   const shirtSize = PROFILE_SHIRT_SIZES.includes(String(payload.shirtSize) as typeof PROFILE_SHIRT_SIZES[number]) ? String(payload.shirtSize) : "";
-  const preferredDelivery = ["workplace", "home", "digital_only"].includes(String(payload.preferredDelivery)) ? String(payload.preferredDelivery) as "workplace" | "home" | "digital_only" : "workplace";
+  const preferredDelivery = ["workplace", "home", "digital_only"].includes(String(payload.preferredDelivery)) ? String(payload.preferredDelivery) : "workplace";
   const completeness = profileCompleteness({ food, stores, rewardTypes: rewards.types, interests, dietary, shirtSize, preferredDelivery });
-  const [existing] = await invite.db.select().from(celebrationPreferences).where(and(eq(celebrationPreferences.employeeId, invite.employee.id), eq(celebrationPreferences.organizationId, invite.organization.id))).limit(1);
-  const values = {
-    organizationId: invite.organization.id, employeeId: invite.employee.id, food: JSON.stringify(food), rewards: JSON.stringify(rewards),
-    interests: JSON.stringify(interests), shirtSize: shirtSize || null, dietary: JSON.stringify(dietary),
-    shareWithHr: payload.privacyMode === "share_with_hr", updatedAt,
+  const safePayload: Json = {
+    food,
+    rewards,
+    interests,
+    dietary,
+    shirtSize,
+    preferredDelivery,
+    privacyMode: payload.privacyMode === "share_with_hr" ? "share_with_hr" : "recommendations_only",
+    completeness,
   };
-  if (existing) await invite.db.update(celebrationPreferences).set(values).where(eq(celebrationPreferences.id, existing.id));
-  else await invite.db.insert(celebrationPreferences).values({ id: crypto.randomUUID(), ...values, createdAt: updatedAt });
-  await invite.db.update(celebrationProfiles).set({ completeness, privacyMode: payload.privacyMode === "share_with_hr" ? "share_with_hr" : "recommendations_only", preferredDelivery, updatedAt }).where(eq(celebrationProfiles.id, invite.profile.id));
-  await invite.db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: invite.organization.id, actorId: "employee-invite-token", action: "celebration_profile.updated", entityType: "celebration_profile", entityId: invite.profile.id, metadata: JSON.stringify({ completeness, privacyMode: payload.privacyMode }), createdAt: updatedAt });
-  return Response.json({ ok: true, completeness }, { headers: { "Cache-Control": "no-store, private" } });
+
+  const { data, error } = await client().rpc("complete_celebration_profile_invite", {
+    p_token: token,
+    p_payload: safePayload,
+  });
+  if (error) {
+    console.error("supabase_profile_invite_update_failed", error);
+    const expired = /invalid or expired/i.test(error.message);
+    return Response.json({ error: expired ? "This invitation has expired. Ask your company for a new link." : "We couldn't save your profile. Please try again." }, { status: expired ? 404 : 500 });
+  }
+  return Response.json({ ok: true, completeness: data }, { headers: { "Cache-Control": "no-store, private" } });
 }

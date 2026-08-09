@@ -2,14 +2,16 @@ import { env } from "cloudflare:workers";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "./schema";
 
+const runtimeEnv = env as unknown as { DB?: D1Database };
+
 export function getDb() {
-  if (!env.DB) {
+  if (!runtimeEnv.DB) {
     throw new Error(
       "Cloudflare D1 binding `DB` is unavailable. Set the `d1` field in .openai/hosting.json to `DB` or let your control plane inject the real binding values before using the database."
     );
   }
 
-  return drizzle(env.DB, { schema });
+  return drizzle(runtimeEnv.DB, { schema });
 }
 
 const runtimeSchema = [
@@ -90,8 +92,9 @@ const runtimeSchema = [
 ];
 
 export async function ensureDb() {
-  if (!env.DB) throw new Error("Cloudflare D1 binding `DB` is unavailable.");
-  await env.DB.batch(runtimeSchema.map((statement) => env.DB.prepare(statement)));
+  if (!runtimeEnv.DB) throw new Error("Cloudflare D1 binding `DB` is unavailable.");
+  const database = runtimeEnv.DB;
+  await database.batch(runtimeSchema.map((statement) => database.prepare(statement)));
   const requiredColumns = [
     ["vendor_products", "vendor_cost_cents", "vendor_cost_cents integer DEFAULT 0 NOT NULL"],
     ["vendor_products", "delivery_cost_cents", "delivery_cost_cents integer DEFAULT 0 NOT NULL"],
@@ -99,8 +102,8 @@ export async function ensureDb() {
     ["concierge_requests", "service_fee_cents", "service_fee_cents integer DEFAULT 0 NOT NULL"],
   ] as const;
   for (const [table, column, definition] of requiredColumns) {
-    const info = await env.DB.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
-    if (!info.results.some((item) => item.name === column)) await env.DB.prepare(`ALTER TABLE ${table} ADD COLUMN ${definition}`).run();
+    const info = await database.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
+    if (!info.results.some((item: { name: string }) => item.name === column)) await database.prepare(`ALTER TABLE ${table} ADD COLUMN ${definition}`).run();
   }
-  await env.DB.prepare("PRAGMA optimize").run();
+  await database.prepare("PRAGMA optimize").run();
 }

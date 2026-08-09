@@ -3,34 +3,28 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { createBrowserClient } from "@supabase/ssr";
-import { ArrowRight, Check, Gift, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, Check, ShieldCheck, Sparkles } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
+import { createBrowserSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/browser";
 
 export function AuthForm({ mode }: { mode: "login" | "signup" | "forgot" }) {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const configured = Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-  );
+  const configured = isSupabaseConfigured();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setMessage("");
     if (!configured) {
-      setMessage("Supabase is not connected in this preview. Use the demo workspace below.");
+      setMessage("Supabase is not configured for this deployment.");
       setBusy(false);
       return;
     }
     const form = new FormData(event.currentTarget);
     const email = String(form.get("email") ?? "");
     const password = String(form.get("password") ?? "");
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    );
+    const supabase = createBrowserSupabaseClient();
     const result = mode === "login"
       ? await supabase.auth.signInWithPassword({ email, password })
       : mode === "forgot"
@@ -41,17 +35,27 @@ export function AuthForm({ mode }: { mode: "login" | "signup" | "forgot" }) {
           email,
           password,
           options: {
+            emailRedirectTo: `${location.origin}/onboarding`,
             data: {
               first_name: form.get("firstName"),
               last_name: form.get("lastName"),
               company_name: form.get("companyName"),
+              employee_count: form.get("employeeCount"),
+              city: form.get("city"),
+              state: form.get("state"),
+              postal_code: form.get("postalCode"),
+              timezone: form.get("timezone"),
             },
           },
         });
 
     if (result.error) setMessage(result.error.message);
     else if (mode === "forgot") setMessage("Check your email for a secure reset link.");
-    else if (mode === "signup") setMessage("Account created. Add your credit card to activate your workspace.");
+    else if (mode === "signup") {
+      const session = await supabase.auth.getSession();
+      if (session.data.session) location.href = "/onboarding";
+      else setMessage("Check your email to confirm your account, then log in to finish setup.");
+    }
     else location.href = "/dashboard";
     setBusy(false);
   }
@@ -85,6 +89,13 @@ export function AuthForm({ mode }: { mode: "login" | "signup" | "forgot" }) {
                 <label>Last name<input name="lastName" required /></label>
               </div>
               <label>Company name<input name="companyName" required /></label>
+              <label>Approximate team size<select name="employeeCount" defaultValue="26-100"><option>1-25</option><option>26-100</option><option>101-300</option><option>301+</option></select></label>
+              <div className="form-grid three">
+                <label>City<input name="city" required /></label>
+                <label>State<input name="state" required maxLength={2} /></label>
+                <label>ZIP<input name="postalCode" required inputMode="numeric" /></label>
+              </div>
+              <label>Timezone<select name="timezone" defaultValue="America/New_York"><option value="America/New_York">Eastern Time</option><option value="America/Chicago">Central Time</option><option value="America/Denver">Mountain Time</option><option value="America/Los_Angeles">Pacific Time</option></select></label>
             </>}
             <label>Work email<input name="email" type="email" required autoFocus={mode !== "signup"} /></label>
             {mode !== "forgot" && <label>Password<input name="password" type="password" required minLength={8} /></label>}
@@ -94,14 +105,9 @@ export function AuthForm({ mode }: { mode: "login" | "signup" | "forgot" }) {
             </div>}
             {message && <div className="auth-message">{message}</div>}
             <button className="button button-primary" disabled={busy}>
-              {busy ? "Please wait…" : mode === "signup" ? "Continue to payment" : mode === "forgot" ? "Send reset link" : "Log in"}<ArrowRight />
+              {busy ? "Please wait…" : mode === "signup" ? "Create workspace" : mode === "forgot" ? "Send reset link" : "Log in"}<ArrowRight />
             </button>
           </form>
-          {mode !== "forgot" && <div className="demo-entry">
-            <span>or</span>
-            <Link className="button button-secondary" href="/dashboard"><Gift /> Explore the demo workspace</Link>
-            {mode === "signup" && <Link className="guided-setup-link" href="/onboarding"><Sparkles /> Preview the guided setup</Link>}
-          </div>}
           <footer>
             {mode === "login" ? <>New to PerkJoy? <Link href="/signup">Start trial</Link></> : mode === "signup" ? <>Already have an account? <Link href="/login">Log in</Link></> : <Link href="/login">← Back to login</Link>}
           </footer>
