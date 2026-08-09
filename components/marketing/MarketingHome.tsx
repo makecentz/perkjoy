@@ -22,7 +22,7 @@ export function MarketingHome() {
         </div>
         <div className="nav-actions">
           <Link className="button button-ghost" href="/login">Log in</Link>
-          <Link className="button button-primary button-small" href="/signup">Start free <ArrowRight size={15} /></Link>
+          <Link className="button button-primary button-small" href="/signup">Start trial <ArrowRight size={15} /></Link>
         </div>
       </nav>
 
@@ -32,12 +32,12 @@ export function MarketingHome() {
           <h1>Never miss a moment <span>worth celebrating.</span></h1>
           <p>PerkJoy remembers birthdays, anniversaries, and the wins in between—then sends the perfect reward right on time.</p>
           <div className="hero-actions">
-            <Link className="button button-primary button-large" href="/signup">Start free <ArrowRight size={18} /></Link>
+            <Link className="button button-primary button-large" href="/signup">Start trial <ArrowRight size={18} /></Link>
             <a className="button button-secondary button-large" href="#how">See how it works</a>
           </div>
           <div className="hero-proof">
             <span className="avatar-stack"><i>SJ</i><i>MB</i><i>AW</i></span>
-            <span><strong>No credit card required</strong><br />Set up your first celebration in minutes</span>
+            <span><strong>Company credit card required</strong><br />Secure payment setup during activation</span>
           </div>
         </div>
 
@@ -125,7 +125,7 @@ export function MarketingHome() {
       <section id="pricing" className="section shell pricing-section">
         <div className="section-heading"><span>SIMPLE, TRANSPARENT PRICING</span><h2>Start small. Celebrate more as you grow.</h2><p>Reward costs are always separate, so you only pay for what you send.</p></div>
         <div className="pricing-grid">
-          {plans.map((plan) => <article className={plan.featured ? "featured-plan" : ""} key={plan.name}>{plan.featured && <i>Most popular</i>}<small>{plan.name}</small><h3>{plan.price}<span>/month</span></h3><p>{plan.people}</p><hr /><ul><li><Check /> Automated celebrations</li><li><Check /> Digital & local rewards</li><li><Check /> Budget controls</li><li><Check /> Activity reports</li></ul><Link className={`button ${plan.featured ? "button-primary" : "button-secondary"}`} href="/signup">Start free</Link></article>)}
+          {plans.map((plan) => <article className={plan.featured ? "featured-plan" : ""} key={plan.name}>{plan.featured && <i>Most popular</i>}<small>{plan.name}</small><h3>{plan.price}<span>/month</span></h3><p>{plan.people}</p><hr /><ul><li><Check /> Automated celebrations</li><li><Check /> Digital & local rewards</li><li><Check /> Budget controls</li><li><Check /> Activity reports</li></ul><Link className={`button ${plan.featured ? "button-primary" : "button-secondary"}`} href="/signup">Start trial</Link></article>)}
           <article className="enterprise-plan"><small>Enterprise</small><h3>Let&apos;s talk</h3><p>Custom programs for teams with 300+ employees.</p><Link className="button button-dark" href="mailto:hello@perkjoy.app">Contact sales</Link></article>
         </div>
       </section>
@@ -140,7 +140,7 @@ export function MarketingHome() {
         ].map(([q, a], i) => <details key={q} open={i === 0}><summary>{q}<ChevronDown /></summary><p>{a}</p></details>)}</div>
       </section>
 
-      <section className="cta-section"><div className="shell"><div><Sparkles /><h2>Your team&apos;s next big moment<br />is already on the calendar.</h2><p>Make sure it feels remembered.</p><Link className="button button-light button-large" href="/signup">Start celebrating free <ArrowRight size={18} /></Link></div></div></section>
+      <section className="cta-section"><div className="shell"><div><Sparkles /><h2>Your team&apos;s next big moment<br />is already on the calendar.</h2><p>Make sure it feels remembered.</p><Link className="button button-light button-large" href="/signup">Start your trial <ArrowRight size={18} /></Link></div></div></section>
 
       <footer><div className="shell footer-top"><div><Logo inverse /><p>Employee appreciation on autopilot.</p></div><div><b>Product</b><a href="#how">How it works</a><Link href="/dashboard">Dashboard</Link><a href="#pricing">Pricing</a></div><div><b>Company</b><a href="mailto:hello@perkjoy.app">Contact</a><a href="#">Privacy</a><a href="#">Terms</a></div><div><b>Sign in</b><Link href="/login">Company login</Link><Link href="/perkjoy-admin">Admin login</Link></div></div><div className="shell footer-bottom"><span>© 2026 PerkJoy. Made with care in Philadelphia.</span><span>Philadelphia, PA <span className="live-dot" /> Systems happy</span></div></footer>
     </main>
