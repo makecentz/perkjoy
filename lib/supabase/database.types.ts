@@ -2043,7 +2043,7 @@ export type Database = {
         }
         Returns: string
       }
-      complete_celebration_profile_invite: {
+      complete_celebration_profile_invite_internal: {
         Args: { p_payload: Json; p_token: string }
         Returns: number
       }
@@ -2056,7 +2056,7 @@ export type Database = {
         }
         Returns: string
       }
-      read_celebration_profile_invite: {
+      read_celebration_profile_invite_internal: {
         Args: { p_token: string }
         Returns: Json
       }

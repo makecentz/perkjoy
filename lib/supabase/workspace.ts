@@ -70,17 +70,6 @@ async function audit(
 }
 
 async function organizationIdFor(client: Client, user: User) {
-  const metadata = user.user_metadata as Record<string, unknown>;
-  requireResult(await client.rpc("bootstrap_perkjoy_workspace", {
-    p_first_name: String(metadata.first_name ?? ""),
-    p_last_name: String(metadata.last_name ?? ""),
-    p_company_name: String(metadata.company_name ?? "My Company"),
-    p_city: String(metadata.city ?? "") || undefined,
-    p_state: String(metadata.state ?? "") || undefined,
-    p_postal_code: String(metadata.postal_code ?? "") || undefined,
-    p_timezone: String(metadata.timezone ?? "America/New_York"),
-  }), "Creating the PerkJoy workspace");
-
   const membership = requireResult(await client
     .from("organization_members")
     .select("organization_id")
@@ -96,20 +85,20 @@ async function loadWorkspace(client: Client, organizationId: string): Promise<Wo
     client.from("organizations").select("*").eq("id", organizationId).single(),
     client.from("organization_settings").select("*").eq("organization_id", organizationId).single(),
     client.from("departments").select("*").eq("organization_id", organizationId),
-    client.from("employees").select("*").eq("organization_id", organizationId).order("first_name"),
+    client.from("employees").select("id,organization_id,first_name,last_name,email,birthday_month,birthday_day,hire_date,department_id,job_title,manager_employee_id,work_location,recognition_preferences,status,work_mode,preferred_celebration_delivery,organization_location_id,created_at,updated_at").eq("organization_id", organizationId).order("first_name"),
     client.from("automation_rules").select("*").eq("organization_id", organizationId).order("created_at"),
     client.from("recognition_events").select("*").eq("organization_id", organizationId),
     client.from("rewards").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }),
     client.from("notifications").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(30),
     client.from("automation_runs").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(10),
-    client.from("local_gift_orders").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }),
+    client.from("local_gift_orders").select("id,organization_id,employee_id,product_id,delivery_date,options,gift_message,customer_amount,delivery_fee,status,created_at,updated_at").eq("organization_id", organizationId).order("created_at", { ascending: false }),
     client.from("celebration_types").select("*").eq("organization_id", organizationId).order("category"),
     client.from("employee_events").select("*").eq("organization_id", organizationId).order("event_date"),
     client.from("celebration_profiles").select("*").eq("organization_id", organizationId),
     client.from("markets").select("*").order("name"),
     client.from("organization_locations").select("*").eq("organization_id", organizationId),
     client.from("vendors").select("id,business_name,slug,demo,active,market_id").eq("active", true),
-    client.from("vendor_products").select("id,vendor_id,name,description,category,image_url,retail_price,delivery_fee,minimum_notice_hours,active,options,service_area,serves_people,lead_time_text,created_at,updated_at,customer_price,delivery_cost,platform_fee,rating,delivery_available").eq("active", true),
+    client.from("vendor_products").select("id,vendor_id,name,description,category,image_url,retail_price,delivery_fee,minimum_notice_hours,active,options,service_area,serves_people,lead_time_text,created_at,updated_at,customer_price,rating,delivery_available").eq("active", true),
     client.from("vendor_availability").select("*").order("created_at"),
     client.from("marketplace_listings").select("*").eq("active", true),
     client.from("bundles").select("*").eq("active", true),
@@ -143,7 +132,7 @@ async function loadWorkspace(client: Client, organizationId: string): Promise<Wo
   const markets = results[13].data as Row<"markets">[];
   const locations = results[14].data as Row<"organization_locations">[];
   const vendors = results[15].data as Pick<Row<"vendors">, "id" | "business_name" | "slug" | "demo" | "active" | "market_id">[];
-  const products = results[16].data as Omit<Row<"vendor_products">, "perkjoy_cost" | "vendor_cost" | "gross_margin">[];
+  const products = results[16].data as Omit<Row<"vendor_products">, "perkjoy_cost" | "vendor_cost" | "gross_margin" | "delivery_cost" | "platform_fee">[];
   const availability = results[17].data as Row<"vendor_availability">[];
   const listings = results[18].data as Row<"marketplace_listings">[];
   const bundles = results[19].data as Row<"bundles">[];
@@ -185,7 +174,7 @@ async function loadWorkspace(client: Client, organizationId: string): Promise<Wo
       description: product.description ?? "",
       category: product.category,
       priceCents: cents(product.customer_price || product.retail_price),
-      deliveryFeeCents: cents(product.delivery_cost || product.delivery_fee),
+      deliveryFeeCents: cents(product.delivery_fee),
       servesPeople: product.serves_people ?? 1,
       demo: vendors.find((vendor) => vendor.id === product.vendor_id)?.demo ?? false,
       marketId: listing.market_id,
@@ -460,7 +449,7 @@ async function createNotification(client: Client, userId: string, organizationId
 
 async function createReward(client: Client, user: User, organizationId: string, payload: Record<string, unknown>) {
   const employeeId = String(payload.employeeId ?? "");
-  const employee = requireResult(await client.from("employees").select("*").eq("id", employeeId).eq("organization_id", organizationId).single(), "Finding the employee");
+  const employee = requireResult(await client.from("employees").select("id,first_name,last_name,email").eq("id", employeeId).eq("organization_id", organizationId).single(), "Finding the employee");
   const amountCents = Number(payload.amountCents ?? 0);
   if (amountCents < 0 || amountCents > 250000) throw new Error("Choose a reward between $0 and $2,500.");
   const recognitionType = String(payload.recognitionType ?? "Great Work");
@@ -550,7 +539,7 @@ export async function mutateSupabaseWorkspace(client: Client, user: User, payloa
       job_title: String(payload.jobTitle ?? "Team Member"),
       work_mode: String(payload.workMode ?? "office"),
       preferred_celebration_delivery: String(payload.preferredDelivery ?? "workplace"),
-    }).select("*").single(), "Adding the employee");
+    }).select("id,hire_date,preferred_celebration_delivery").single(), "Adding the employee");
     requireResult(await client.from("celebration_profiles").insert({
       organization_id: organizationId,
       employee_id: employee.id,
@@ -567,7 +556,7 @@ export async function mutateSupabaseWorkspace(client: Client, user: User, payloa
     await createReward(client, user, organizationId, payload);
   } else if (action === "generateRecommendation") {
     const employeeId = String(payload.employeeId ?? "");
-    const employee = requireResult(await client.from("employees").select("*").eq("id", employeeId).eq("organization_id", organizationId).single(), "Finding the employee");
+    const employee = requireResult(await client.from("employees").select("id,first_name,work_mode").eq("id", employeeId).eq("organization_id", organizationId).single(), "Finding the employee");
     const [profileResult, historyResult, eventResult, marketResult] = await Promise.all([
       client.from("celebration_profiles").select("*").eq("employee_id", employeeId).single(),
       client.from("gift_history").select("title").eq("employee_id", employeeId).order("created_at", { ascending: false }),

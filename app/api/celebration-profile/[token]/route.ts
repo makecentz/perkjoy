@@ -1,27 +1,33 @@
-import { createClient } from "@supabase/supabase-js";
 import { allowedStrings, PROFILE_DIETARY, PROFILE_INTERESTS, PROFILE_REWARD_TYPES, PROFILE_SHIRT_SIZES, profileCompleteness } from "@/lib/celebration-profile";
-import type { Database, Json } from "@/lib/supabase/database.types";
+import type { Json } from "@/lib/supabase/database.types";
 import { isServerSupabaseConfigured } from "@/lib/supabase/request";
 import { GET as getD1Profile, POST as updateD1Profile } from "./d1-route";
 
 type RouteContext = { params: Promise<{ token: string }> };
 
-function client() {
-  return createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    { auth: { persistSession: false, autoRefreshToken: false } },
-  );
+async function profileFunction(body: Record<string, unknown>) {
+  return fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/perkjoy-profile`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
 }
+
 export async function GET(request: Request, context: RouteContext) {
   if (!isServerSupabaseConfigured()) return getD1Profile(request, context);
   const { token } = await context.params;
-  const { data, error } = await client().rpc("read_celebration_profile_invite", { p_token: token });
-  if (error) {
-    console.error("supabase_profile_invite_read_failed", error);
+  const response = await profileFunction({ action: "read", token });
+  if (!response.ok) {
+    const details = await response.text();
+    console.error("supabase_profile_invite_read_failed", response.status, details);
+    if (response.status === 404) return Response.json({ error: "This invitation has expired. Ask your company for a new link." }, { status: 404 });
     return Response.json({ error: "We couldn't open this invitation. Please ask for a fresh link." }, { status: 500 });
   }
-  if (!data) return Response.json({ error: "This invitation has expired. Ask your company for a new link." }, { status: 404 });
+  const data = await response.json();
   return Response.json(data, { headers: { "Cache-Control": "no-store, private" } });
 }
 
@@ -63,14 +69,13 @@ export async function POST(request: Request, context: RouteContext) {
     completeness,
   };
 
-  const { data, error } = await client().rpc("complete_celebration_profile_invite", {
-    p_token: token,
-    p_payload: safePayload,
-  });
-  if (error) {
-    console.error("supabase_profile_invite_update_failed", error);
-    const expired = /invalid or expired/i.test(error.message);
+  const response = await profileFunction({ action: "complete", token, payload: safePayload });
+  if (!response.ok) {
+    const details = await response.text();
+    console.error("supabase_profile_invite_update_failed", response.status, details);
+    const expired = response.status === 404;
     return Response.json({ error: expired ? "This invitation has expired. Ask your company for a new link." : "We couldn't save your profile. Please try again." }, { status: expired ? 404 : 500 });
   }
-  return Response.json({ ok: true, completeness: data }, { headers: { "Cache-Control": "no-store, private" } });
+  const data = await response.json() as { completeness: number };
+  return Response.json({ ok: true, completeness: data.completeness }, { headers: { "Cache-Control": "no-store, private" } });
 }
