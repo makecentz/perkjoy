@@ -36,8 +36,12 @@ export function MarketingHome() {
             <a className="button button-secondary button-large" href="#how">See how it works</a>
           </div>
           <div className="hero-proof">
-            <span className="avatar-stack"><i>SJ</i><i>MB</i><i>AW</i></span>
-            <span><strong>Company credit card required</strong><br />Secure payment setup during activation</span>
+            <span className="card-brand-stack" aria-label="Accepted credit cards: Visa, Mastercard, and American Express">
+              <i className="card-brand card-brand-visa" aria-hidden="true">VISA</i>
+              <i className="card-brand card-brand-mastercard" aria-hidden="true"><span /><span /></i>
+              <i className="card-brand card-brand-amex" aria-hidden="true">AMERICAN<br />EXPRESS</i>
+            </span>
+            <span><strong>Credit card required</strong><br />Secure payment setup during activation</span>
           </div>
         </div>
 

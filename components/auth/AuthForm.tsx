@@ -51,7 +51,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" | "forgot" }) {
 
     if (result.error) setMessage(result.error.message);
     else if (mode === "forgot") setMessage("Check your email for a secure reset link.");
-    else if (mode === "signup") setMessage("Account created. Add your company credit card to activate your workspace.");
+    else if (mode === "signup") setMessage("Account created. Add your credit card to activate your workspace.");
     else location.href = "/dashboard";
     setBusy(false);
   }
@@ -77,7 +77,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" | "forgot" }) {
         <div className="auth-form-card">
           <small>{mode === "signup" ? "START YOUR PERKJOY WORKSPACE" : mode === "forgot" ? "RESET YOUR PASSWORD" : "WELCOME BACK"}</small>
           <h2>{mode === "signup" ? "Create your PerkJoy account" : mode === "forgot" ? "Forgot your password?" : "Log in to PerkJoy"}</h2>
-          <p>{mode === "signup" ? "A company credit card is required to activate your workspace." : mode === "forgot" ? "We'll send a secure reset link to your work email." : "Your team's next celebration is waiting."}</p>
+          <p>{mode === "signup" ? "A credit card is required to activate your workspace." : mode === "forgot" ? "We'll send a secure reset link to your work email." : "Your team's next celebration is waiting."}</p>
           <form onSubmit={submit}>
             {mode === "signup" && <>
               <div className="form-grid">

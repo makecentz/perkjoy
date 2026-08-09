@@ -46,9 +46,13 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .hero-actions { display: flex; gap: 12px; margin-top: 32px; }
 .hero-proof { display: flex; align-items: center; gap: 15px; margin-top: 32px; color: #7b7771; font-size: 12px; line-height: 1.5; }
 .hero-proof strong { color: var(--ink); font-size: 13px; }
-.avatar-stack { display: flex; }
-.avatar-stack i { width: 34px; height: 34px; display: grid; place-items: center; margin-left: -8px; border: 3px solid white; border-radius: 50%; color: white; font: 800 10px/1 var(--font-display); background: #547f7b; }
-.avatar-stack i:first-child { margin-left: 0; background: var(--coral); }.avatar-stack i:last-child { background: #bc8a55; }
+.card-brand-stack { display: flex; align-items: center; gap: 6px; }
+.card-brand { width: 40px; height: 27px; flex: 0 0 auto; display: grid; place-items: center; overflow: hidden; border: 1px solid #dedbd5; border-radius: 5px; background: white; box-shadow: 0 2px 6px rgba(31, 43, 40, .08); font-style: normal; }
+.card-brand-visa { color: #1434cb; font: italic 900 13px/1 Arial, sans-serif; letter-spacing: -1px; }
+.card-brand-mastercard { position: relative; grid-template-columns: 1fr 1fr; padding: 0 7px; }
+.card-brand-mastercard span { width: 16px; height: 16px; border-radius: 50%; background: #eb001b; }
+.card-brand-mastercard span:last-child { margin-left: -5px; background: #f79e1b; opacity: .94; }
+.card-brand-amex { color: white; border-color: #006fcf; background: #006fcf; font: 800 6px/1 Arial, sans-serif; text-align: center; letter-spacing: -.1px; }
 .hero-visual { min-height: 500px; position: relative; display: grid; place-items: center; background: radial-gradient(circle at 50% 40%, #fff0d9 0 42%, transparent 43%); }
 .automation-card { position: relative; z-index: 2; width: min(460px, 92%); padding: 23px; border: 1px solid #eee9df; border-radius: 24px; background: rgba(255,255,255,.96); box-shadow: 0 30px 90px rgba(67, 50, 30, .17); transform: rotate(1deg); }
 .automation-head { display: flex; justify-content: space-between; align-items: center; padding-bottom: 15px; border-bottom: 1px solid #eeeae3; }
