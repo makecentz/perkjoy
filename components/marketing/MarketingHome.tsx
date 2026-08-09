@@ -8,8 +8,8 @@ import { Logo } from "@/components/brand/Logo";
 
 const plans = [
   { name: "Starter", people: "Up to 25 employees", price: "$29", featured: false },
-  { name: "Growth", people: "Up to 100 employees", price: "$79", featured: true },
-  { name: "Business", people: "Up to 300 employees", price: "$179", featured: false },
+  { name: "Growth", people: "Up to 50 employees", price: "$79", featured: true },
+  { name: "Business", people: "Up to 100 employees", price: "$179", featured: false },
 ];
 
 export function MarketingHome() {
@@ -126,7 +126,7 @@ export function MarketingHome() {
         <div className="section-heading"><span>SIMPLE, TRANSPARENT PRICING</span><h2>Start small. Celebrate more as you grow.</h2><p>Reward costs are always separate, so you only pay for what you send.</p></div>
         <div className="pricing-grid">
           {plans.map((plan) => <article className={plan.featured ? "featured-plan" : ""} key={plan.name}>{plan.featured && <i>Most popular</i>}<small>{plan.name}</small><h3>{plan.price}<span>/month</span></h3><p>{plan.people}</p><hr /><ul><li><Check /> Automated celebrations</li><li><Check /> Digital & local rewards</li><li><Check /> Budget controls</li><li><Check /> Activity reports</li></ul><Link className={`button ${plan.featured ? "button-primary" : "button-secondary"}`} href="/signup">Start trial</Link></article>)}
-          <article className="enterprise-plan"><small>Enterprise</small><h3>Let&apos;s talk</h3><p>Custom programs for teams with 300+ employees.</p><Link className="button button-dark" href="mailto:hello@perkjoy.app">Contact sales</Link></article>
+          <article className="enterprise-plan"><small>Enterprise</small><h3>Let&apos;s talk</h3><p>Custom programs for teams with more than 100 employees.</p><Link className="button button-dark" href="mailto:hello@perkjoy.app">Contact sales</Link></article>
         </div>
       </section>
 
