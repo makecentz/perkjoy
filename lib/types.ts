@@ -85,7 +85,6 @@ export type EmployeeEvent = {
 export type CelebrationProfile = {
   id: string;
   employeeId: string;
-  inviteToken: string;
   inviteExpiresAt: string;
   completeness: number;
   privacyMode: "share_with_hr" | "recommendations_only";

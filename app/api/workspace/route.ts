@@ -22,6 +22,7 @@ import {
   vendorAvailability,
   vendorProducts,
 } from "@/db/schema";
+import { hashProfileToken, profileToken } from "@/lib/celebration-profile";
 
 function identity(request: Request) {
   const id = request.headers.get("oai-authenticated-user-id");
@@ -85,23 +86,29 @@ async function ensureDifferentiationData(organizationId: string) {
     })));
   }
 
-  const existingProfiles = await db.select().from(celebrationProfiles).where(eq(celebrationProfiles.organizationId, organizationId)).limit(1);
+  const existingProfiles = await db.select().from(celebrationProfiles).where(eq(celebrationProfiles.organizationId, organizationId));
   if (!existingProfiles.length) {
     const completeness = [80, 100, 65, 45, 35];
     const workModes = ["hybrid", "remote", "office", "hybrid", "office"] as const;
     const deliveries = ["workplace", "digital_only", "workplace", "home", "workplace"] as const;
-    await db.insert(celebrationProfiles).values(employeeRows.map((employee, index) => ({
-      id: crypto.randomUUID(), organizationId, employeeId: employee.id, inviteToken: crypto.randomUUID(),
+    await db.insert(celebrationProfiles).values(await Promise.all(employeeRows.map(async (employee, index) => ({
+      id: crypto.randomUUID(), organizationId, employeeId: employee.id, inviteTokenHash: await hashProfileToken(profileToken()),
       inviteExpiresAt: new Date(Date.now() + 30 * 86400000).toISOString(), completeness: completeness[index % completeness.length],
       privacyMode: index === 0 ? "share_with_hr" as const : "recommendations_only" as const,
       workMode: workModes[index % workModes.length], preferredDelivery: deliveries[index % deliveries.length], updatedAt: createdAt,
-    })));
+    }))));
     const sarah = employeeRows.find((employee) => employee.firstName === "Sarah") ?? employeeRows[0];
     const marcus = employeeRows.find((employee) => employee.firstName === "Marcus") ?? employeeRows[1] ?? employeeRows[0];
     await db.insert(celebrationPreferences).values([
       { id: crypto.randomUUID(), organizationId, employeeId: sarah.id, food: JSON.stringify({ cake: "Chocolate", restaurant: "Little Nonna's", lunch: "Italian", drink: "Cold brew" }), rewards: JSON.stringify({ stores: ["Target"], types: ["Food", "Physical Gifts"] }), interests: JSON.stringify(["Food", "Travel", "Books"]), dietary: JSON.stringify(["Vegetarian"]), shareWithHr: true, createdAt, updatedAt: createdAt },
       { id: crypto.randomUUID(), organizationId, employeeId: marcus.id, food: JSON.stringify({ drink: "Coffee", snack: "Dark chocolate" }), rewards: JSON.stringify({ stores: ["Starbucks"], types: ["Gift Cards", "Experiences"] }), interests: JSON.stringify(["Technology", "Gaming", "Music"]), dietary: JSON.stringify(["Prefer Not to Say"]), shareWithHr: false, createdAt, updatedAt: createdAt },
     ]);
+  } else {
+    for (const profile of existingProfiles) {
+      if (!/^[a-f0-9]{64}$/.test(profile.inviteTokenHash)) {
+        await db.update(celebrationProfiles).set({ inviteTokenHash: await hashProfileToken(profile.inviteTokenHash), inviteExpiresAt: createdAt, updatedAt: createdAt }).where(eq(celebrationProfiles.id, profile.id));
+      }
+    }
   }
 
   const existingEvents = await db.select().from(employeeEvents).where(eq(employeeEvents.organizationId, organizationId)).limit(1);
@@ -224,7 +231,10 @@ async function workspace(organizationId: string) {
   ]);
   return {
     organization, employees: employeeRows, rules: ruleRows, rewards: rewardRows, products: productRows, localOrders: orderRows,
-    celebrationTypes: typeRows, events: eventRows, profiles: profileRows, markets: marketRows,
+    celebrationTypes: typeRows, events: eventRows, profiles: profileRows.map((profile) => ({
+      id: profile.id, employeeId: profile.employeeId, inviteExpiresAt: profile.inviteExpiresAt, completeness: profile.completeness,
+      privacyMode: profile.privacyMode, workMode: profile.workMode, preferredDelivery: profile.preferredDelivery,
+    })), markets: marketRows,
     bundles: bundleRows.map((bundle) => ({ ...bundle, items: bundleItemRows.filter((item) => item.bundleId === bundle.id) })),
     recommendations: recommendationRows, approvals: approvalRows, conciergeRequests: conciergeRows, teamCelebrations: teamRows,
   };
@@ -250,13 +260,14 @@ export async function POST(request: Request) {
     const payload = await request.json() as Record<string, unknown>;
     const db = getDb();
     const createdAt = now();
+    let profileInviteUrl: string | undefined;
 
     if (payload.action === "addEmployee") {
       const firstName = String(payload.firstName ?? "").trim(); const lastName = String(payload.lastName ?? "").trim(); const email = String(payload.email ?? "").trim().toLowerCase();
       if (!firstName || !lastName || !email.includes("@")) return Response.json({ error: "Add a name and valid work email." }, { status: 400 });
       const id = crypto.randomUUID();
       await db.insert(employees).values({ id, organizationId: organization.id, firstName, lastName, email, department: String(payload.department ?? "General"), jobTitle: String(payload.jobTitle ?? "Team Member"), birthdayMonth: Number(payload.birthdayMonth ?? 1), birthdayDay: Number(payload.birthdayDay ?? 1), hireDate: String(payload.hireDate ?? new Date().toISOString().slice(0, 10)), status: "active", createdAt });
-      await db.insert(celebrationProfiles).values({ id: crypto.randomUUID(), organizationId: organization.id, employeeId: id, inviteToken: crypto.randomUUID(), inviteExpiresAt: new Date(Date.now() + 30 * 86400000).toISOString(), completeness: 0, privacyMode: "recommendations_only", workMode: String(payload.workMode ?? "office") as "office", preferredDelivery: String(payload.preferredDelivery ?? "workplace") as "workplace", updatedAt: createdAt });
+      await db.insert(celebrationProfiles).values({ id: crypto.randomUUID(), organizationId: organization.id, employeeId: id, inviteTokenHash: await hashProfileToken(profileToken()), inviteExpiresAt: new Date(Date.now() + 30 * 86400000).toISOString(), completeness: 0, privacyMode: "recommendations_only", workMode: String(payload.workMode ?? "office") as "office", preferredDelivery: String(payload.preferredDelivery ?? "workplace") as "workplace", updatedAt: createdAt });
       await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "employee.created", entityType: "employee", entityId: id, createdAt });
     } else if (payload.action === "recognize" || payload.action === "quickCelebrate") {
       const employeeId = String(payload.employeeId ?? "");
@@ -275,8 +286,12 @@ export async function POST(request: Request) {
       await db.update(employeeEvents).set({ status: "scheduled", rewardSummary: "$25 employee-choice reward scheduled", handledSteps: JSON.stringify(["Reward selected", "Delivery scheduled", "Manager notified"]) }).where(eq(employeeEvents.id, eventId));
       await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "celebration.handled", entityType: "employee_event", entityId: eventId, createdAt });
     } else if (payload.action === "refreshProfileInvite") {
-      const employeeId = String(payload.employeeId ?? ""); const inviteToken = crypto.randomUUID();
-      await db.update(celebrationProfiles).set({ inviteToken, inviteExpiresAt: new Date(Date.now() + 30 * 86400000).toISOString(), updatedAt: createdAt }).where(and(eq(celebrationProfiles.employeeId, employeeId), eq(celebrationProfiles.organizationId, organization.id)));
+      const employeeId = String(payload.employeeId ?? "");
+      const [employee] = await db.select().from(employees).where(and(eq(employees.id, employeeId), eq(employees.organizationId, organization.id))).limit(1);
+      if (!employee) return Response.json({ error: "Employee not found." }, { status: 404 });
+      const token = profileToken();
+      await db.update(celebrationProfiles).set({ inviteTokenHash: await hashProfileToken(token), inviteExpiresAt: new Date(Date.now() + 7 * 86400000).toISOString(), updatedAt: createdAt }).where(and(eq(celebrationProfiles.employeeId, employeeId), eq(celebrationProfiles.organizationId, organization.id)));
+      profileInviteUrl = `${new URL(request.url).origin}/celebrate/${encodeURIComponent(token)}`;
       await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "celebration_profile.invited", entityType: "employee", entityId: employeeId, createdAt });
     } else if (payload.action === "toggleCelebrationType") {
       const typeId = String(payload.typeId ?? ""); const [type] = await db.select().from(celebrationTypes).where(and(eq(celebrationTypes.id, typeId), eq(celebrationTypes.organizationId, organization.id))).limit(1);
@@ -316,7 +331,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Unknown action." }, { status: 400 });
     }
 
-    return Response.json(await workspace(organization.id));
+    return Response.json({ ...await workspace(organization.id), profileInviteUrl });
   } catch (error) {
     console.error("workspace_mutation_failed", error);
     const message = error instanceof Error && error.message.includes("UNIQUE") ? "That record already exists." : "We couldn't save that change. Nothing was charged.";

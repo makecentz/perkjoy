@@ -135,7 +135,7 @@ export const celebrationProfiles = sqliteTable("celebration_profiles", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
   employeeId: text("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
-  inviteToken: text("invite_token").notNull(),
+  inviteTokenHash: text("invite_token").notNull(),
   inviteExpiresAt: text("invite_expires_at").notNull(),
   completeness: integer("completeness").notNull().default(0),
   privacyMode: text("privacy_mode", { enum: ["share_with_hr", "recommendations_only"] }).notNull().default("recommendations_only"),
@@ -144,7 +144,7 @@ export const celebrationProfiles = sqliteTable("celebration_profiles", {
   updatedAt: text("updated_at").notNull(),
 }, (table) => [
   uniqueIndex("celebration_profiles_employee_unique").on(table.employeeId),
-  uniqueIndex("celebration_profiles_invite_token_unique").on(table.inviteToken),
+  uniqueIndex("celebration_profiles_invite_token_unique").on(table.inviteTokenHash),
   index("idx_celebration_profiles_org").on(table.organizationId),
 ]);
 

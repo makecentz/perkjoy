@@ -4,6 +4,7 @@ import { birthdayForYear, celebrationEventKey, isLeapYear, nextAnniversary, next
 import { validateBudget } from "../lib/budget";
 import type { Employee } from "../lib/types";
 import { RuleBasedRecommendationProvider } from "../services/recommendations/CelebrationRecommendationService";
+import { allowedStrings, hashProfileToken, PROFILE_INTERESTS, profileCompleteness } from "../lib/celebration-profile";
 
 const employee: Employee = { id: "employee-1", firstName: "Alex", lastName: "Rivera", email: "alex@example.com", department: "Design", jobTitle: "Designer", birthdayMonth: 8, birthdayDay: 14, hireDate: "2021-08-20", status: "active" };
 
@@ -58,4 +59,19 @@ test("avoids repeating a previous local gift and falls back to digital", () => {
   assert.equal(result.rewardType, "digital");
   assert.equal(result.title, "Starbucks digital reward");
   assert.equal(result.somethingDifferent, true);
+});
+
+test("hashes celebration profile tokens before storage", async () => {
+  const hash = await hashProfileToken("abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGH");
+  assert.match(hash, /^[a-f0-9]{64}$/);
+  assert.equal(hash.includes("abcdefghijklmnopqrstuvwxyz"), false);
+});
+
+test("calculates profile completeness by optional section", () => {
+  assert.equal(profileCompleteness({ food: {}, stores: [], rewardTypes: [], interests: [], dietary: [], shirtSize: "", preferredDelivery: "" }), 0);
+  assert.equal(profileCompleteness({ food: { cake: "Chocolate" }, stores: [], rewardTypes: ["Food"], interests: ["Books"], dietary: [], shirtSize: "", preferredDelivery: "workplace" }), 67);
+});
+
+test("drops unsupported private-profile selections", () => {
+  assert.deepEqual(allowedStrings(["Books", "Unknown", "Books"], PROFILE_INTERESTS, 12), ["Books"]);
 });
