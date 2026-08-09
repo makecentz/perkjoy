@@ -186,6 +186,17 @@ export const organizationLocations = sqliteTable("organization_locations", {
   active: integer("active", { mode: "boolean" }).notNull().default(true),
 }, (table) => [index("idx_locations_org_active").on(table.organizationId, table.active)]);
 
+export const employeeLocations = sqliteTable("employee_locations", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  employeeId: text("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  organizationLocationId: text("organization_location_id").notNull().references(() => organizationLocations.id, { onDelete: "cascade" }),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("employee_locations_employee_unique").on(table.employeeId),
+  index("idx_employee_locations_location").on(table.organizationLocationId),
+]);
+
 export const bundles = sqliteTable("bundles", {
   id: text("id").primaryKey(),
   marketId: text("market_id").notNull().references(() => markets.id, { onDelete: "cascade" }),
@@ -285,3 +296,16 @@ export const vendorAvailability = sqliteTable("vendor_availability", {
   deliveryHours: text("delivery_hours").notNull().default("{}"),
   fulfillmentMethod: text("fulfillment_method", { enum: ["vendor_delivery", "perkjoy_arranged", "pickup", "third_party"] }).notNull().default("vendor_delivery"),
 }, (table) => [index("idx_vendor_availability_market").on(table.marketId)]);
+
+export const marketplaceListings = sqliteTable("marketplace_listings", {
+  id: text("id").primaryKey(),
+  productId: text("product_id").notNull().references(() => vendorProducts.id, { onDelete: "cascade" }),
+  marketId: text("market_id").notNull().references(() => markets.id, { onDelete: "cascade" }),
+  vendorAvailabilityId: text("vendor_availability_id").notNull().references(() => vendorAvailability.id, { onDelete: "cascade" }),
+  ratingTenths: integer("rating_tenths").notNull().default(49),
+  preferenceTags: text("preference_tags").notNull().default("[]"),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+}, (table) => [
+  uniqueIndex("marketplace_listings_product_market_unique").on(table.productId, table.marketId),
+  index("idx_marketplace_listings_market_active").on(table.marketId, table.active),
+]);

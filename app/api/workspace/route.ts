@@ -12,9 +12,11 @@ import {
   conciergeRequests,
   employeeEvents,
   employees,
+  employeeLocations,
   giftHistory,
   localOrders,
   markets,
+  marketplaceListings,
   organizationLocations,
   organizations,
   recommendations,
@@ -136,6 +138,13 @@ async function ensureDifferentiationData(organizationId: string) {
       { id: `${organizationId}:location:remote`, organizationId, marketId: null, name: "Remote", locationType: "remote", address: null, active: true },
     ]);
   }
+  const existingEmployeeLocations = await db.select().from(employeeLocations).where(eq(employeeLocations.organizationId, organizationId)).limit(1);
+  if (!existingEmployeeLocations.length) {
+    await db.insert(employeeLocations).values(employeeRows.map((employee, index) => ({
+      id: `${organizationId}:employee-location:${employee.id}`, organizationId, employeeId: employee.id,
+      organizationLocationId: employee.firstName === "Marcus" ? `${organizationId}:location:remote` : index % 3 === 2 ? `${organizationId}:location:cherry-hill` : `${organizationId}:location:philly`, createdAt,
+    })));
+  }
 
   const existingBundles = await db.select().from(bundles).limit(1);
   if (!existingBundles.length) {
@@ -155,11 +164,25 @@ async function ensureDifferentiationData(organizationId: string) {
     ]);
   }
 
-  const existingAvailability = await db.select().from(vendorAvailability).limit(1);
-  if (!existingAvailability.length) {
-    await db.insert(vendorAvailability).values([
+  const availabilityCatalog = [
       { id: "availability-demo-bakery", marketId: "market-philadelphia", vendorName: "Demo Philadelphia Bakery", minimumNoticeHours: 48, availableDays: JSON.stringify([1,2,3,4,5,6]), blackoutDates: "[]", deliveryHours: JSON.stringify({ start: "09:00", end: "17:00" }), fulfillmentMethod: "vendor_delivery" },
       { id: "availability-demo-kitchen", marketId: "market-philadelphia", vendorName: "Demo Philadelphia Kitchen", minimumNoticeHours: 72, availableDays: JSON.stringify([1,2,3,4,5]), blackoutDates: "[]", deliveryHours: JSON.stringify({ start: "10:00", end: "15:00" }), fulfillmentMethod: "perkjoy_arranged" },
+      { id: "availability-demo-confectioner", marketId: "market-philadelphia", vendorName: "Demo Philadelphia Confectioner", minimumNoticeHours: 48, availableDays: JSON.stringify([1,2,3,4,5,6]), blackoutDates: "[]", deliveryHours: JSON.stringify({ start: "10:00", end: "17:00" }), fulfillmentMethod: "vendor_delivery" },
+      { id: "availability-demo-florist", marketId: "market-philadelphia", vendorName: "Demo Philadelphia Florist", minimumNoticeHours: 24, availableDays: JSON.stringify([1,2,3,4,5,6]), blackoutDates: "[]", deliveryHours: JSON.stringify({ start: "09:00", end: "16:00" }), fulfillmentMethod: "third_party" },
+      { id: "availability-demo-roaster", marketId: "market-philadelphia", vendorName: "Demo Philadelphia Roaster", minimumNoticeHours: 24, availableDays: JSON.stringify([1,2,3,4,5]), blackoutDates: "[]", deliveryHours: JSON.stringify({ start: "07:00", end: "12:00" }), fulfillmentMethod: "vendor_delivery" },
+    ] as const;
+  const existingAvailability = await db.select().from(vendorAvailability);
+  const missingAvailability = availabilityCatalog.filter((item) => !existingAvailability.some((existing) => existing.id === item.id));
+  if (missingAvailability.length) await db.insert(vendorAvailability).values(missingAvailability.map((item) => ({ ...item, fulfillmentMethod: item.fulfillmentMethod as "vendor_delivery" | "perkjoy_arranged" | "pickup" | "third_party" })));
+  const existingListings = await db.select().from(marketplaceListings).limit(1);
+  if (!existingListings.length) {
+    await db.insert(marketplaceListings).values([
+      { id: "listing-demo-cake", productId: "demo-cake", marketId: "market-philadelphia", vendorAvailabilityId: "availability-demo-bakery", ratingTenths: 49, preferenceTags: JSON.stringify(["cake", "chocolate", "food", "birthday"]), active: true },
+      { id: "listing-demo-cupcakes", productId: "demo-cupcakes", marketId: "market-philadelphia", vendorAvailabilityId: "availability-demo-bakery", ratingTenths: 48, preferenceTags: JSON.stringify(["cake", "dessert", "food", "birthday"]), active: true },
+      { id: "listing-demo-box", productId: "demo-box", marketId: "market-philadelphia", vendorAvailabilityId: "availability-demo-confectioner", ratingTenths: 47, preferenceTags: JSON.stringify(["snack", "dessert", "physical gifts"]), active: true },
+      { id: "listing-demo-flowers", productId: "demo-flowers", marketId: "market-philadelphia", vendorAvailabilityId: "availability-demo-florist", ratingTenths: 49, preferenceTags: JSON.stringify(["flowers", "physical gifts", "wedding"]), active: true },
+      { id: "listing-demo-lunch", productId: "demo-lunch", marketId: "market-philadelphia", vendorAvailabilityId: "availability-demo-kitchen", ratingTenths: 48, preferenceTags: JSON.stringify(["lunch", "restaurant", "food", "team achievement"]), active: true },
+      { id: "listing-demo-coffee", productId: "demo-coffee", marketId: "market-philadelphia", vendorAvailabilityId: "availability-demo-roaster", ratingTenths: 49, preferenceTags: JSON.stringify(["coffee", "drink", "food", "new hire"]), active: true },
     ]);
   }
 
@@ -228,7 +251,7 @@ async function ensureWorkspace(ownerId: string) {
 async function workspace(organizationId: string) {
   const db = getDb();
   const [organization] = await db.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
-  const [employeeRows, ruleRows, rewardRows, productRows, orderRows, typeRows, eventRows, profileRows, marketRows, bundleRows, bundleItemRows, recommendationRows, giftHistoryRows, approvalRows, conciergeRows, teamRows] = await Promise.all([
+  const [employeeRows, ruleRows, rewardRows, productRows, orderRows, typeRows, eventRows, profileRows, preferenceRows, marketRows, locationRows, employeeLocationRows, availabilityRows, listingRows, bundleRows, bundleItemRows, recommendationRows, giftHistoryRows, approvalRows, conciergeRows, teamRows] = await Promise.all([
     db.select().from(employees).where(eq(employees.organizationId, organizationId)).orderBy(employees.firstName),
     db.select().from(automationRules).where(eq(automationRules.organizationId, organizationId)).orderBy(automationRules.createdAt),
     db.select().from(rewards).where(eq(rewards.organizationId, organizationId)).orderBy(desc(rewards.createdAt)),
@@ -237,19 +260,33 @@ async function workspace(organizationId: string) {
     db.select().from(celebrationTypes).where(eq(celebrationTypes.organizationId, organizationId)).orderBy(celebrationTypes.category),
     db.select().from(employeeEvents).where(eq(employeeEvents.organizationId, organizationId)).orderBy(employeeEvents.eventDate),
     db.select().from(celebrationProfiles).where(eq(celebrationProfiles.organizationId, organizationId)),
-    db.select().from(markets), db.select().from(bundles).where(eq(bundles.active, true)), db.select().from(bundleItems),
+    db.select().from(celebrationPreferences).where(eq(celebrationPreferences.organizationId, organizationId)),
+    db.select().from(markets),
+    db.select().from(organizationLocations).where(eq(organizationLocations.organizationId, organizationId)),
+    db.select().from(employeeLocations).where(eq(employeeLocations.organizationId, organizationId)),
+    db.select().from(vendorAvailability), db.select().from(marketplaceListings).where(eq(marketplaceListings.active, true)),
+    db.select().from(bundles).where(eq(bundles.active, true)), db.select().from(bundleItems),
     db.select().from(recommendations).where(eq(recommendations.organizationId, organizationId)).orderBy(desc(recommendations.recommendationScore)),
     db.select().from(giftHistory).where(eq(giftHistory.organizationId, organizationId)).orderBy(desc(giftHistory.createdAt)),
     db.select().from(approvalRequests).where(eq(approvalRequests.organizationId, organizationId)).orderBy(desc(approvalRequests.createdAt)),
     db.select().from(conciergeRequests).where(eq(conciergeRequests.organizationId, organizationId)).orderBy(desc(conciergeRequests.createdAt)),
     db.select().from(teamCelebrations).where(eq(teamCelebrations.organizationId, organizationId)).orderBy(teamCelebrations.eventDate),
   ]);
+  const marketplaceProducts = productRows.flatMap((product) => {
+    const listing = listingRows.find((item) => item.productId === product.id); const availability = availabilityRows.find((item) => item.id === listing?.vendorAvailabilityId);
+    return listing && availability ? [{ ...product, marketId: listing.marketId, rating: listing.ratingTenths / 10, minimumNoticeHours: availability.minimumNoticeHours, availableDays: JSON.parse(availability.availableDays), blackoutDates: JSON.parse(availability.blackoutDates), fulfillmentMethod: availability.fulfillmentMethod, preferenceTags: JSON.parse(listing.preferenceTags) }] : [];
+  });
+  const marketplaceMatches = Object.fromEntries(employeeRows.map((employee) => {
+    const preference = preferenceRows.find((item) => item.employeeId === employee.id); if (!preference) return [employee.id, []];
+    const food = Object.values(JSON.parse(preference.food) as Record<string, string>).join(" ").toLowerCase(); const rewards = JSON.stringify(JSON.parse(preference.rewards)).toLowerCase();
+    return [employee.id, marketplaceProducts.filter((product) => product.preferenceTags.some((tag) => food.includes(tag) || rewards.includes(tag))).map((product) => product.id)];
+  }));
   return {
-    organization, employees: employeeRows, rules: ruleRows, rewards: rewardRows, products: productRows, localOrders: orderRows,
+    organization, employees: employeeRows, rules: ruleRows, rewards: rewardRows, products: marketplaceProducts, localOrders: orderRows,
     celebrationTypes: typeRows, events: eventRows, profiles: profileRows.map((profile) => ({
       id: profile.id, employeeId: profile.employeeId, inviteExpiresAt: profile.inviteExpiresAt, completeness: profile.completeness,
       privacyMode: profile.privacyMode, workMode: profile.workMode, preferredDelivery: profile.preferredDelivery,
-    })), markets: marketRows,
+    })), markets: marketRows, organizationLocations: locationRows, employeeLocations: employeeLocationRows.map((item) => ({ employeeId: item.employeeId, organizationLocationId: item.organizationLocationId })), marketplaceMatches,
     bundles: bundleRows.map((bundle) => ({ ...bundle, items: bundleItemRows.filter((item) => item.bundleId === bundle.id) })),
     recommendations: recommendationRows, giftHistory: giftHistoryRows, approvals: approvalRows, conciergeRequests: conciergeRows, teamCelebrations: teamRows,
   };
@@ -369,11 +406,22 @@ export async function POST(request: Request) {
       const employeeId = String(payload.employeeId ?? ""); const productId = String(payload.productId ?? "");
       const [employee] = await db.select().from(employees).where(and(eq(employees.id, employeeId), eq(employees.organizationId, organization.id))).limit(1); const [product] = await db.select().from(vendorProducts).where(eq(vendorProducts.id, productId)).limit(1);
       if (!employee || !product) return Response.json({ error: "Employee or product not found." }, { status: 404 });
+      const [[listing], [availability], [assignment], [profile]] = await Promise.all([
+        db.select().from(marketplaceListings).where(and(eq(marketplaceListings.productId, productId), eq(marketplaceListings.active, true))).limit(1),
+        db.select().from(vendorAvailability).where(eq(vendorAvailability.vendorName, product.vendorName)).limit(1),
+        db.select().from(employeeLocations).where(and(eq(employeeLocations.employeeId, employeeId), eq(employeeLocations.organizationId, organization.id))).limit(1),
+        db.select().from(celebrationProfiles).where(and(eq(celebrationProfiles.employeeId, employeeId), eq(celebrationProfiles.organizationId, organization.id))).limit(1),
+      ]);
+      if (!listing || !availability) return Response.json({ error: "This product is not currently available in an active PerkJoy market." }, { status: 409 });
+      const [location] = assignment ? await db.select().from(organizationLocations).where(and(eq(organizationLocations.id, assignment.organizationLocationId), eq(organizationLocations.organizationId, organization.id))).limit(1) : [undefined];
+      if (!location?.marketId || location.marketId !== listing.marketId || profile?.preferredDelivery === "digital_only") return Response.json({ error: "This employee's celebration location is outside the vendor's delivery market." }, { status: 409 });
       const deliveryDate = String(payload.deliveryDate ?? "");
-      if (new Date(`${deliveryDate}T12:00:00`).getTime() < Date.now() + 36 * 60 * 60 * 1000) return Response.json({ error: "This vendor needs at least 48 hours' notice. Choose a later date." }, { status: 400 });
+      const delivery = new Date(`${deliveryDate}T12:00:00`); const availableDays = JSON.parse(availability.availableDays) as number[]; const blackoutDates = JSON.parse(availability.blackoutDates) as string[];
+      if (!Number.isFinite(delivery.getTime()) || delivery.getTime() < Date.now() + availability.minimumNoticeHours * 60 * 60 * 1000) return Response.json({ error: `This vendor needs at least ${availability.minimumNoticeHours} hours' notice. Choose a later date.` }, { status: 400 });
+      if (!availableDays.includes(delivery.getDay()) || blackoutDates.includes(deliveryDate)) return Response.json({ error: "This vendor is unavailable on that date. Choose another delivery day." }, { status: 409 });
       const id = crypto.randomUUID();
-      await db.insert(localOrders).values({ id, organizationId: organization.id, employeeId, productId, deliveryDate, totalCents: product.priceCents + product.deliveryFeeCents, status: "paid", createdAt });
-      await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "local_order.created", entityType: "local_order", entityId: id, metadata: JSON.stringify({ fulfillmentMethod: "vendor_delivery" }), createdAt });
+      await db.insert(localOrders).values({ id, organizationId: organization.id, employeeId, productId, deliveryDate, totalCents: product.priceCents + product.deliveryFeeCents, status: "awaiting_confirmation", createdAt });
+      await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "local_order.created", entityType: "local_order", entityId: id, metadata: JSON.stringify({ fulfillmentMethod: availability.fulfillmentMethod, marketId: listing.marketId, organizationLocationId: location.id }), createdAt });
     } else if (payload.action === "saveBudget") {
       const monthlyBudgetCents = Number(payload.monthlyBudgetCents ?? 0);
       if (monthlyBudgetCents < 0 || monthlyBudgetCents > 100000000) return Response.json({ error: "Enter a valid monthly budget." }, { status: 400 });

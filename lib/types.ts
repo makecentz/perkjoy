@@ -46,6 +46,13 @@ export type Product = {
   deliveryFeeCents: number;
   servesPeople: number;
   demo: boolean;
+  marketId: string;
+  rating: number;
+  minimumNoticeHours: number;
+  availableDays: number[];
+  blackoutDates: string[];
+  fulfillmentMethod: "vendor_delivery" | "perkjoy_arranged" | "pickup" | "third_party";
+  preferenceTags: string[];
 };
 
 export type LocalOrder = {
@@ -103,6 +110,17 @@ export type Market = {
   launchStatus: "active" | "coming_soon";
 };
 
+export type OrganizationLocation = {
+  id: string;
+  marketId: string | null;
+  name: string;
+  locationType: "office" | "remote";
+  address: string | null;
+  active: boolean;
+};
+
+export type EmployeeLocation = { employeeId: string; organizationLocationId: string };
+
 export type Bundle = {
   id: string;
   marketId: string;
@@ -112,7 +130,7 @@ export type Bundle = {
   category: string;
   customerPriceCents: number;
   active: boolean;
-  items: { id: string; name: string; quantity: number }[];
+  items: { id: string; productId: string | null; name: string; quantity: number }[];
 };
 
 export type Recommendation = {
@@ -181,6 +199,9 @@ export type Workspace = {
   events: EmployeeEvent[];
   profiles: CelebrationProfile[];
   markets: Market[];
+  organizationLocations: OrganizationLocation[];
+  employeeLocations: EmployeeLocation[];
+  marketplaceMatches: Record<string, string[]>;
   bundles: Bundle[];
   recommendations: Recommendation[];
   giftHistory: GiftHistory[];

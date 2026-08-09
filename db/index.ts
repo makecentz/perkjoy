@@ -48,6 +48,9 @@ const runtimeSchema = [
   `CREATE UNIQUE INDEX IF NOT EXISTS markets_slug_unique ON markets (slug)`,
   `CREATE TABLE IF NOT EXISTS organization_locations (id text PRIMARY KEY NOT NULL, organization_id text NOT NULL REFERENCES organizations(id) ON DELETE cascade, market_id text REFERENCES markets(id) ON DELETE set null, name text NOT NULL, location_type text DEFAULT 'office' NOT NULL, address text, active integer DEFAULT true NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS idx_locations_org_active ON organization_locations (organization_id,active)`,
+  `CREATE TABLE IF NOT EXISTS employee_locations (id text PRIMARY KEY NOT NULL, organization_id text NOT NULL REFERENCES organizations(id) ON DELETE cascade, employee_id text NOT NULL REFERENCES employees(id) ON DELETE cascade, organization_location_id text NOT NULL REFERENCES organization_locations(id) ON DELETE cascade, created_at text NOT NULL)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS employee_locations_employee_unique ON employee_locations (employee_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_employee_locations_location ON employee_locations (organization_location_id)`,
   `CREATE TABLE IF NOT EXISTS bundles (id text PRIMARY KEY NOT NULL, market_id text NOT NULL REFERENCES markets(id) ON DELETE cascade, vendor_name text NOT NULL, name text NOT NULL, description text NOT NULL, category text NOT NULL, customer_price_cents integer NOT NULL, active integer DEFAULT true NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS idx_bundles_market_active ON bundles (market_id,active)`,
   `CREATE TABLE IF NOT EXISTS bundle_items (id text PRIMARY KEY NOT NULL, bundle_id text NOT NULL REFERENCES bundles(id) ON DELETE cascade, product_id text REFERENCES vendor_products(id) ON DELETE set null, name text NOT NULL, quantity integer DEFAULT 1 NOT NULL)`,
@@ -66,6 +69,9 @@ const runtimeSchema = [
   `CREATE INDEX IF NOT EXISTS idx_team_celebrations_org_date ON team_celebrations (organization_id,event_date)`,
   `CREATE TABLE IF NOT EXISTS vendor_availability (id text PRIMARY KEY NOT NULL, market_id text NOT NULL REFERENCES markets(id) ON DELETE cascade, vendor_name text NOT NULL, minimum_notice_hours integer DEFAULT 48 NOT NULL, available_days text DEFAULT '[]' NOT NULL, blackout_dates text DEFAULT '[]' NOT NULL, delivery_hours text DEFAULT '{}' NOT NULL, fulfillment_method text DEFAULT 'vendor_delivery' NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS idx_vendor_availability_market ON vendor_availability (market_id)`,
+  `CREATE TABLE IF NOT EXISTS marketplace_listings (id text PRIMARY KEY NOT NULL, product_id text NOT NULL REFERENCES vendor_products(id) ON DELETE cascade, market_id text NOT NULL REFERENCES markets(id) ON DELETE cascade, vendor_availability_id text NOT NULL REFERENCES vendor_availability(id) ON DELETE cascade, rating_tenths integer DEFAULT 49 NOT NULL, preference_tags text DEFAULT '[]' NOT NULL, active integer DEFAULT true NOT NULL)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS marketplace_listings_product_market_unique ON marketplace_listings (product_id,market_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_marketplace_listings_market_active ON marketplace_listings (market_id,active)`,
 ];
 
 export async function ensureDb() {
