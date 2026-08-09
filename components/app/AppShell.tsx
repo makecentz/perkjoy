@@ -5,7 +5,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle, Award, BarChart3, Bell, Building2, CakeSlice, CalendarDays, Check, CheckCircle2, ChevronDown,
-  CircleDollarSign, CreditCard, Gift, LayoutDashboard, Menu, MoreHorizontal,
+  CircleDollarSign, CreditCard, Gift, History, LayoutDashboard, Menu, MoreHorizontal,
   Plus, Search, Settings, ShieldCheck, Sparkles, Store, Users, WandSparkles, X, Zap,
 } from "lucide-react";
 import { format, formatDistanceToNow, isSameMonth } from "date-fns";
@@ -99,6 +99,7 @@ export function AppShell({ view = "dashboard" }: { view?: View }) {
         <nav className="app-nav">
           <small>WORKSPACE</small>
           {nav.slice(0, 7).map((item) => <Link className={item.view === view ? "active" : ""} href={item.href} key={item.view} onClick={() => setMobileOpen(false)}><item.icon />{item.label}{item.view === "celebrations" && <em>8</em>}</Link>)}
+          <Link href="/rewards/history" onClick={() => setMobileOpen(false)}><History />Reward History</Link>
           <small>MANAGE</small>
           {nav.slice(7).map((item) => <Link className={item.view === view ? "active" : ""} href={item.href} key={item.view} onClick={() => setMobileOpen(false)}><item.icon />{item.label}</Link>)}
         </nav>
@@ -187,6 +188,7 @@ function EmployeesView({ data, celebrations, openEmployee, openRecognize, mutate
     {inviteLink && <div className="profile-link-ready"><Check /><div><b>Secure profile link ready</b><small>This link expires in 7 days. Send it directly to the employee.</small><code>{inviteLink}</code></div><button onClick={() => navigator.clipboard.writeText(inviteLink)}>Copy link</button><Link href={inviteLink}>Open form</Link></div>}
     <div className="toolbar"><label><Search /><input placeholder="Search employees" value={query} onChange={(e) => setQuery(e.target.value)} /></label><select aria-label="Department"><option>All departments</option><option>Design</option><option>Engineering</option></select><select aria-label="Status"><option>Active employees</option></select><span>{filtered.length} people</span></div>
     <section className="app-card data-table profile-table"><div className="table-row table-head"><span>Employee</span><span>Department</span><span>Work mode</span><span>Next moment</span><span>Celebration Profile</span><span>Status</span><span /></div>{filtered.map((employee) => { const next = data.events.find((event) => event.employeeId === employee.id); const profile = data.profiles.find((item) => item.employeeId === employee.id); return <div className="table-row" key={employee.id}><span className="employee-cell"><i className="avatar avatar-coral">{initials(employee)}</i><p><b>{fullName(employee)}</b><small>{employee.email}</small></p></span><span><b>{employee.department}</b><small>{employee.jobTitle}</small></span><span><b className="capitalize">{profile?.workMode ?? "office"}</b><small>{profile?.preferredDelivery.replace("_", " ")}</small></span><span><b>{next?.title ?? celebrations.find((c) => c.employee.id === employee.id)?.label}</b><small>{next ? format(new Date(`${next.eventDate}T12:00:00`), "MMM d") : "Watching calendar"}</small></span><span><div className="profile-completeness"><b>{profile?.completeness ?? 0}%</b><i><span style={{ width: `${profile?.completeness ?? 0}%` }} /></i></div><button onClick={() => createInvite(employee.id)}>{profile?.completeness ? "Update profile link" : "Create profile link"}</button></span><span><em className="status-badge active"><i /> Active</em></span><span><button className="icon-button" onClick={() => openRecognize(employee.id)} aria-label={`Celebrate ${fullName(employee)}`}><Award /></button></span></div>; })}</section>
+    <section className="employee-profile-links"><div><small>DETAILED PROFILES</small><h2>Open an employee&apos;s full celebration record.</h2></div><div>{filtered.map((employee) => <Link href={`/employees/${employee.id}`} key={employee.id}><span className="avatar avatar-coral">{initials(employee)}</span><span><b>{fullName(employee)}</b><small>{employee.jobTitle}</small></span><em>View profile →</em></Link>)}</div></section>
     <div className="profile-invite-help"><div><Sparkles /><span><b>Create Your Celebration Profile</b><small>Employees receive a secure, expiring link. They do not need a company account.</small></span></div><small>Raw invitation tokens are shown once and never stored.</small></div>
   </>;
 }

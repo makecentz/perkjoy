@@ -1,5 +1,4 @@
 import Link from "next/link";
-/* eslint-disable jsx-a11y/anchor-is-valid */
 import {
   ArrowRight, Award, CakeSlice, CalendarDays, Check, ChevronDown,
   Gift, HeartHandshake, MapPin, PartyPopper, Sparkles, Star, Trophy,
@@ -153,7 +152,7 @@ export function MarketingHome() {
 
       <section className="cta-section"><div className="shell"><div><Sparkles /><h2>Your team&apos;s next big moment<br />is already on the calendar.</h2><p>PerkJoy remembers it. Personalizes it. Helps deliver it.</p><Link className="button button-light button-large" href="/signup">Start Celebrating <ArrowRight size={18} /></Link></div></div></section>
 
-      <footer><div className="shell footer-top"><div><Logo inverse /><p>Employee celebrations on autopilot.</p></div><div><b>Product</b><a href="#how">How it works</a><Link href="/dashboard">Dashboard</Link><a href="#pricing">Pricing</a></div><div><b>Company</b><a href="mailto:hello@perkjoy.app">Contact</a><a href="#">Privacy</a><a href="#">Terms</a></div><div><b>Sign in</b><Link href="/login">Company login</Link><Link href="/perkjoy-admin">Admin login</Link></div></div><div className="shell footer-bottom"><span>© 2026 PerkJoy. Made with care in Philadelphia.</span><span>Philadelphia, PA <span className="live-dot" /> Systems happy</span></div></footer>
+      <footer><div className="shell footer-top"><div><Logo inverse /><p>Employee celebrations on autopilot.</p></div><div><b>Product</b><a href="#how">How it works</a><Link href="/dashboard">Dashboard</Link><a href="#pricing">Pricing</a></div><div><b>Company</b><Link href="/contact">Contact</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div><div><b>Sign in</b><Link href="/login">Company login</Link><Link href="/perkjoy-admin">Admin login</Link></div></div><div className="shell footer-bottom"><span>© 2026 PerkJoy. Made with care in Philadelphia.</span><span>Philadelphia, PA <span className="live-dot" /> Systems happy</span></div></footer>
     </main>
   );
 }
