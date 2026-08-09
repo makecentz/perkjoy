@@ -17,7 +17,7 @@ export function MarketingHome() {
       <nav className="marketing-nav shell">
         <Link href="/" aria-label="PerkJoy home"><Logo /></Link>
         <div className="nav-links">
-          <a href="#how">How it works</a><a href="#local">PerkJoy Local</a><a href="#pricing">Pricing</a>
+          <a href="#how">How it works</a><Link href="/perkjoy-local">PerkJoy Local</Link><a href="#pricing">Pricing</a>
         </div>
         <div className="nav-actions">
           <Link className="button button-ghost" href="/login">Log in</Link>
@@ -92,8 +92,8 @@ export function MarketingHome() {
       <section className="section shell choices-section">
         <div className="section-heading"><span>CHOOSE HOW YOU CELEBRATE</span><h2>One place. Every kind of appreciation.</h2><p>From instant digital rewards to a cake from around the corner.</p></div>
         <div className="choice-grid">
-          <article className="choice-card choice-orange"><div className="choice-art"><Gift size={42} /><span>$50</span></div><small>PERFECT WHEN DIGITAL MAKES SENSE</small><h3>Digital Rewards</h3><p>Ideal for remote employees, instant recognition, last-minute moments, and employee preference.</p><a href="#pricing">Explore rewards <ArrowRight size={16} /></a></article>
-          <article className="choice-card choice-cream"><div className="choice-art cake-art"><CakeSlice size={48} /><i>PHL</i></div><small>PHILADELPHIA FAVORITES</small><h3>PerkJoy Local</h3><p>Cakes, cupcakes, and thoughtful gifts from local makers.</p><a href="#local">Shop local gifts <ArrowRight size={16} /></a></article>
+          <article className="choice-card choice-orange"><div className="choice-art"><Gift size={42} /><span>$50</span></div><small>PERFECT WHEN DIGITAL MAKES SENSE</small><h3>Digital Rewards</h3><p>Ideal for remote employees, instant recognition, last-minute moments, and employee preference.</p><Link href="/rewards">Explore rewards <ArrowRight size={16} /></Link></article>
+          <article className="choice-card choice-cream"><div className="choice-art cake-art"><CakeSlice size={48} /><i>PHL</i></div><small>PHILADELPHIA FAVORITES</small><h3>PerkJoy Local</h3><p>Cakes, cupcakes, and thoughtful gifts from local makers.</p><Link href="/perkjoy-local">Shop local gifts <ArrowRight size={16} /></Link></article>
           <article className="choice-card choice-yellow"><div className="choice-art trophy-art"><Trophy size={46} /><Star size={18} /></div><small>RIGHT IN THE MOMENT</small><h3>Manager Recognition</h3><p>Send a meaningful reward for a job well done—right away.</p><Link href="/dashboard">See manager tools <ArrowRight size={16} /></Link></article>
         </div>
       </section>
@@ -112,11 +112,11 @@ export function MarketingHome() {
       <section className="section shell preview-section">
         <div className="section-heading"><span>YOUR CELEBRATION COMMAND CENTER</span><h2>See every moment before it happens.</h2></div>
         <div className="dashboard-preview">
-          <aside><Logo /><div className="preview-nav"><b>Overview</b><span>Employees</span><span>Celebrations</span><span>Rewards</span><span>PerkJoy Local</span></div></aside>
+          <aside><Logo /><div className="preview-nav"><Link className="active" href="/dashboard">Overview</Link><Link href="/employees">Employees</Link><Link href="/celebrations">Celebrations</Link><Link href="/rewards">Rewards</Link><Link href="/perkjoy-local">PerkJoy Local</Link></div></aside>
           <div className="preview-main">
-            <div className="preview-title"><div><h3>PerkJoy has this handled.</h3><p>You hire the people. PerkJoy remembers the moments.</p></div><button>+ Celebrate Someone</button></div>
+            <div className="preview-title"><div><h3>PerkJoy has this handled.</h3><p>You hire the people. PerkJoy remembers the moments.</p></div><Link href="/dashboard">+ Celebrate Someone</Link></div>
             <div className="preview-kpis"><span><small>MOMENTS HANDLED</small><b>3</b><em>Every detail confirmed</em></span><span><small>NEEDS ATTENTION</small><b>1</b><em>One quick decision</em></span><span><small>CELEBRATION HEALTH</small><b>75%</b><em>3 of 4 on track</em></span></div>
-            <div className="preview-list"><div className="preview-list-head"><b>What&apos;s Coming Up</b><small>Open calendar →</small></div>
+            <div className="preview-list"><div className="preview-list-head"><b>What&apos;s Coming Up</b><Link href="/celebrations">Open calendar →</Link></div>
               <div><span className="avatar avatar-coral">SJ</span><p><b>Sarah Johnson</b><small>Birthday · Tomorrow</small></p><em className="pill handled-pill">Handled</em></div>
               <div><span className="avatar avatar-gold">MB</span><p><b>Marcus Brown</b><small>5 year anniversary · Aug 14</small></p><em className="pill scheduled-pill">Scheduled</em></div>
               <div><span className="avatar avatar-green">NW</span><p><b>Nicole Williams</b><small>Birthday · In 5 days</small></p><em className="pill attention-pill">Needs Attention</em></div>
@@ -136,7 +136,7 @@ export function MarketingHome() {
         <div className="section-heading"><span>SIMPLE, TRANSPARENT PRICING</span><h2>Start small. Celebrate more as you grow.</h2><p>Reward costs are always separate, so you only pay for what you send.</p></div>
         <div className="pricing-grid">
           {plans.map((plan) => <article className={plan.featured ? "featured-plan" : ""} key={plan.name}>{plan.featured && <i>Most popular</i>}<small>{plan.name}</small><h3>{plan.price}<span>/month</span></h3><p>{plan.people}</p><hr /><ul><li><Check /> Automated celebrations</li><li><Check /> Digital & local rewards</li><li><Check /> Budget controls</li><li><Check /> Activity reports</li></ul><Link className={`button ${plan.featured ? "button-primary" : "button-secondary"}`} href="/signup">Start Celebrating</Link></article>)}
-          <article className="enterprise-plan"><small>Enterprise</small><h3>Let&apos;s talk</h3><p>Custom programs for teams with more than 100 employees.</p><Link className="button button-dark" href="mailto:hello@perkjoy.app">Contact sales</Link></article>
+          <article className="enterprise-plan"><small>Enterprise</small><h3>Let&apos;s talk</h3><p>Custom programs for teams with more than 100 employees.</p><Link className="button button-dark" href="/contact">Contact sales</Link></article>
         </div>
       </section>
 
