@@ -61,6 +61,17 @@ test("avoids repeating a previous local gift and falls back to digital", () => {
   assert.equal(result.somethingDifferent, true);
 });
 
+test("requires employer approval for a Surprise Me physical recommendation", () => {
+  const result = new RuleBasedRecommendationProvider().recommend({
+    employeeName: "Sarah", occasion: "Birthday", budgetCents: 7500, workMode: "hybrid", preferredDelivery: "workplace",
+    favoriteCake: "Chocolate", marketActive: true, previousGiftTitles: ["$50 Target digital reward"], surpriseMe: true,
+  });
+  assert.equal(result.rewardType, "local");
+  assert.equal(result.title, "Chocolate Birthday Cake");
+  assert.equal(result.requiresApproval, true);
+  assert.equal(result.somethingDifferent, true);
+});
+
 test("hashes celebration profile tokens before storage", async () => {
   const hash = await hashProfileToken("abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGH");
   assert.match(hash, /^[a-f0-9]{64}$/);

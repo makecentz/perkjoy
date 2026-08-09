@@ -223,6 +223,22 @@ export const recommendations = sqliteTable("recommendations", {
   index("idx_recommendations_employee").on(table.employeeId),
 ]);
 
+export const giftHistory = sqliteTable("gift_history", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  employeeId: text("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  recommendationId: text("recommendation_id").references(() => recommendations.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  rewardType: text("reward_type").notNull(),
+  occasion: text("occasion").notNull(),
+  amountCents: integer("amount_cents").notNull().default(0),
+  status: text("status", { enum: ["scheduled", "sent", "delivered"] }).notNull().default("scheduled"),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  index("idx_gift_history_employee_created").on(table.employeeId, table.createdAt),
+  index("idx_gift_history_org_created").on(table.organizationId, table.createdAt),
+]);
+
 export const approvalRequests = sqliteTable("approval_requests", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),

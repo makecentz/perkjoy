@@ -12,6 +12,7 @@ import {
   conciergeRequests,
   employeeEvents,
   employees,
+  giftHistory,
   localOrders,
   markets,
   organizationLocations,
@@ -23,6 +24,7 @@ import {
   vendorProducts,
 } from "@/db/schema";
 import { hashProfileToken, profileToken } from "@/lib/celebration-profile";
+import { RuleBasedRecommendationProvider } from "@/services/recommendations/CelebrationRecommendationService";
 
 function identity(request: Request) {
   const id = request.headers.get("oai-authenticated-user-id");
@@ -166,10 +168,22 @@ async function ensureDifferentiationData(organizationId: string) {
     const person = (name: string, fallback: number) => employeeRows.find((employee) => employee.firstName === name) ?? employeeRows[fallback] ?? employeeRows[0];
     await db.insert(recommendations).values([
       { id: `${organizationId}:recommendation:sarah`, organizationId, employeeId: person("Sarah", 0).id, employeeEventId: `${organizationId}:event:sarah`, rewardType: "Local", title: "Chocolate Birthday Cake", amountCents: 4900, recommendationScore: 96, recommendationReason: "Great match — Sarah selected chocolate as her favorite cake flavor.", somethingDifferent: true, status: "approved", createdAt },
-      { id: `${organizationId}:recommendation:marcus`, organizationId, employeeId: person("Marcus", 1).id, employeeEventId: `${organizationId}:event:marcus`, rewardType: "Digital", title: "$25 Starbucks", amountCents: 2500, recommendationScore: 91, recommendationReason: "Marcus selected coffee as one of his favorites.", somethingDifferent: true, status: "recommended", createdAt },
+      { id: `${organizationId}:recommendation:marcus`, organizationId, employeeId: person("Marcus", 1).id, employeeEventId: `${organizationId}:event:marcus`, rewardType: "Digital", title: "$25 Starbucks", amountCents: 2500, recommendationScore: 91, recommendationReason: "Strong match based on Marcus's private Celebration Profile, work mode, budget, and gift history.", somethingDifferent: true, status: "recommended", createdAt },
       { id: `${organizationId}:recommendation:nicole`, organizationId, employeeId: person("Nicole", 4).id, employeeEventId: `${organizationId}:event:nicole`, rewardType: "Surprise Me", title: "Birthday Surprise bundle", amountCents: 7900, recommendationScore: 82, recommendationReason: "Fits Nicole's workplace delivery preference and the birthday budget.", somethingDifferent: false, status: "awaiting_approval", createdAt },
     ]);
     await db.insert(approvalRequests).values({ id: `${organizationId}:approval:nicole`, organizationId, entityType: "recommendation", entityId: `${organizationId}:recommendation:nicole`, approvalLevel: "admin", amountCents: 7900, status: "pending", createdAt });
+  }
+  const privateMarcus = employeeRows.find((employee) => employee.firstName === "Marcus");
+  if (privateMarcus) await db.update(recommendations).set({ recommendationReason: "Strong match based on Marcus's private Celebration Profile, work mode, budget, and gift history." }).where(and(eq(recommendations.organizationId, organizationId), eq(recommendations.employeeId, privateMarcus.id), eq(recommendations.id, `${organizationId}:recommendation:marcus`)));
+
+  const existingGiftHistory = await db.select().from(giftHistory).where(eq(giftHistory.organizationId, organizationId)).limit(1);
+  if (!existingGiftHistory.length) {
+    const sarah = employeeRows.find((employee) => employee.firstName === "Sarah") ?? employeeRows[0];
+    const marcus = employeeRows.find((employee) => employee.firstName === "Marcus") ?? employeeRows[1] ?? employeeRows[0];
+    await db.insert(giftHistory).values([
+      { id: `${organizationId}:gift:sarah:2025`, organizationId, employeeId: sarah.id, recommendationId: null, title: "$50 Target digital reward", rewardType: "digital", occasion: "Birthday", amountCents: 5000, status: "delivered", createdAt: new Date(Date.now() - 320 * 86400000).toISOString() },
+      { id: `${organizationId}:gift:marcus:2025`, organizationId, employeeId: marcus.id, recommendationId: null, title: "Amazon digital reward", rewardType: "digital", occasion: "Work Anniversary", amountCents: 5000, status: "delivered", createdAt: new Date(Date.now() - 280 * 86400000).toISOString() },
+    ]);
   }
 
   const existingTeamCelebrations = await db.select().from(teamCelebrations).where(eq(teamCelebrations.organizationId, organizationId)).limit(1);
@@ -214,7 +228,7 @@ async function ensureWorkspace(ownerId: string) {
 async function workspace(organizationId: string) {
   const db = getDb();
   const [organization] = await db.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
-  const [employeeRows, ruleRows, rewardRows, productRows, orderRows, typeRows, eventRows, profileRows, marketRows, bundleRows, bundleItemRows, recommendationRows, approvalRows, conciergeRows, teamRows] = await Promise.all([
+  const [employeeRows, ruleRows, rewardRows, productRows, orderRows, typeRows, eventRows, profileRows, marketRows, bundleRows, bundleItemRows, recommendationRows, giftHistoryRows, approvalRows, conciergeRows, teamRows] = await Promise.all([
     db.select().from(employees).where(eq(employees.organizationId, organizationId)).orderBy(employees.firstName),
     db.select().from(automationRules).where(eq(automationRules.organizationId, organizationId)).orderBy(automationRules.createdAt),
     db.select().from(rewards).where(eq(rewards.organizationId, organizationId)).orderBy(desc(rewards.createdAt)),
@@ -225,6 +239,7 @@ async function workspace(organizationId: string) {
     db.select().from(celebrationProfiles).where(eq(celebrationProfiles.organizationId, organizationId)),
     db.select().from(markets), db.select().from(bundles).where(eq(bundles.active, true)), db.select().from(bundleItems),
     db.select().from(recommendations).where(eq(recommendations.organizationId, organizationId)).orderBy(desc(recommendations.recommendationScore)),
+    db.select().from(giftHistory).where(eq(giftHistory.organizationId, organizationId)).orderBy(desc(giftHistory.createdAt)),
     db.select().from(approvalRequests).where(eq(approvalRequests.organizationId, organizationId)).orderBy(desc(approvalRequests.createdAt)),
     db.select().from(conciergeRequests).where(eq(conciergeRequests.organizationId, organizationId)).orderBy(desc(conciergeRequests.createdAt)),
     db.select().from(teamCelebrations).where(eq(teamCelebrations.organizationId, organizationId)).orderBy(teamCelebrations.eventDate),
@@ -236,7 +251,7 @@ async function workspace(organizationId: string) {
       privacyMode: profile.privacyMode, workMode: profile.workMode, preferredDelivery: profile.preferredDelivery,
     })), markets: marketRows,
     bundles: bundleRows.map((bundle) => ({ ...bundle, items: bundleItemRows.filter((item) => item.bundleId === bundle.id) })),
-    recommendations: recommendationRows, approvals: approvalRows, conciergeRequests: conciergeRows, teamCelebrations: teamRows,
+    recommendations: recommendationRows, giftHistory: giftHistoryRows, approvals: approvalRows, conciergeRequests: conciergeRows, teamCelebrations: teamRows,
   };
 }
 
@@ -269,15 +284,51 @@ export async function POST(request: Request) {
       await db.insert(employees).values({ id, organizationId: organization.id, firstName, lastName, email, department: String(payload.department ?? "General"), jobTitle: String(payload.jobTitle ?? "Team Member"), birthdayMonth: Number(payload.birthdayMonth ?? 1), birthdayDay: Number(payload.birthdayDay ?? 1), hireDate: String(payload.hireDate ?? new Date().toISOString().slice(0, 10)), status: "active", createdAt });
       await db.insert(celebrationProfiles).values({ id: crypto.randomUUID(), organizationId: organization.id, employeeId: id, inviteTokenHash: await hashProfileToken(profileToken()), inviteExpiresAt: new Date(Date.now() + 30 * 86400000).toISOString(), completeness: 0, privacyMode: "recommendations_only", workMode: String(payload.workMode ?? "office") as "office", preferredDelivery: String(payload.preferredDelivery ?? "workplace") as "workplace", updatedAt: createdAt });
       await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "employee.created", entityType: "employee", entityId: id, createdAt });
+    } else if (payload.action === "generateRecommendation") {
+      const employeeId = String(payload.employeeId ?? "");
+      const [employee] = await db.select().from(employees).where(and(eq(employees.id, employeeId), eq(employees.organizationId, organization.id))).limit(1);
+      if (!employee) return Response.json({ error: "Employee not found." }, { status: 404 });
+      const [[profile], [preferences], [market], history, [event]] = await Promise.all([
+        db.select().from(celebrationProfiles).where(and(eq(celebrationProfiles.employeeId, employeeId), eq(celebrationProfiles.organizationId, organization.id))).limit(1),
+        db.select().from(celebrationPreferences).where(and(eq(celebrationPreferences.employeeId, employeeId), eq(celebrationPreferences.organizationId, organization.id))).limit(1),
+        db.select().from(markets).where(eq(markets.active, true)).limit(1),
+        db.select().from(giftHistory).where(and(eq(giftHistory.employeeId, employeeId), eq(giftHistory.organizationId, organization.id))).orderBy(desc(giftHistory.createdAt)),
+        db.select().from(employeeEvents).where(and(eq(employeeEvents.employeeId, employeeId), eq(employeeEvents.organizationId, organization.id))).orderBy(employeeEvents.eventDate).limit(1),
+      ]);
+      const food = preferences ? JSON.parse(preferences.food) as Record<string, string> : {};
+      const rewardPreferences = preferences ? JSON.parse(preferences.rewards) as { stores?: string[]; types?: string[] } : {};
+      const interests = preferences ? JSON.parse(preferences.interests) as string[] : [];
+      const budgetCents = Math.min(100000, Math.max(0, Number(payload.budgetCents ?? 5000)));
+      const result = new RuleBasedRecommendationProvider().recommend({
+        employeeName: employee.firstName, occasion: event?.title ?? "Recognition", budgetCents,
+        workMode: profile?.workMode ?? "office", preferredDelivery: profile?.preferredDelivery ?? "workplace",
+        favoriteCake: food.cake, favoriteStore: rewardPreferences.stores?.[0], favoriteDrink: food.drink,
+        preferredRewardTypes: rewardPreferences.types, interests, marketActive: Boolean(market), previousGiftTitles: history.map((gift) => gift.title),
+        surpriseMe: payload.surpriseMe === true,
+      });
+      await db.update(recommendations).set({ status: "rejected" }).where(and(eq(recommendations.organizationId, organization.id), eq(recommendations.employeeId, employeeId), eq(recommendations.status, "recommended")));
+      const recommendationId = crypto.randomUUID();
+      const recommendationReason = profile?.privacyMode === "share_with_hr" ? result.reason : `Strong match based on ${employee.firstName}'s private Celebration Profile, work mode, budget, and gift history.`;
+      await db.insert(recommendations).values({ id: recommendationId, organizationId: organization.id, employeeId, employeeEventId: event?.id ?? null, rewardType: payload.surpriseMe === true ? "Surprise Me" : result.rewardType, title: result.title, amountCents: result.amountCents, recommendationScore: result.score, recommendationReason, somethingDifferent: result.somethingDifferent, status: "recommended", createdAt });
+      await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "recommendation.generated", entityType: "recommendation", entityId: recommendationId, metadata: JSON.stringify({ rewardType: result.rewardType, score: result.score, surpriseMe: payload.surpriseMe === true }), createdAt });
+    } else if (payload.action === "approveRecommendation") {
+      const recommendationId = String(payload.recommendationId ?? "");
+      const [recommendation] = await db.select().from(recommendations).where(and(eq(recommendations.id, recommendationId), eq(recommendations.organizationId, organization.id))).limit(1);
+      if (!recommendation) return Response.json({ error: "Recommendation not found." }, { status: 404 });
+      await db.update(recommendations).set({ status: "approved" }).where(eq(recommendations.id, recommendationId));
+      await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "recommendation.approved", entityType: "recommendation", entityId: recommendationId, metadata: JSON.stringify({ purchaseCreated: false }), createdAt });
     } else if (payload.action === "recognize" || payload.action === "quickCelebrate") {
       const employeeId = String(payload.employeeId ?? "");
       const [employee] = await db.select().from(employees).where(and(eq(employees.id, employeeId), eq(employees.organizationId, organization.id))).limit(1);
       if (!employee) return Response.json({ error: "Employee not found." }, { status: 404 });
       const amountCents = Number(payload.amountCents ?? (payload.action === "quickCelebrate" ? 2500 : 0));
       if (amountCents < 0 || amountCents > 100000) return Response.json({ error: "Reward amount is outside your policy." }, { status: 400 });
+      const [recommendation] = payload.recommendationId ? await db.select().from(recommendations).where(and(eq(recommendations.id, String(payload.recommendationId)), eq(recommendations.organizationId, organization.id), eq(recommendations.employeeId, employeeId))).limit(1) : [undefined];
+      if (payload.action === "quickCelebrate" && recommendation && ["local", "experience", "surprise me"].includes(recommendation.rewardType.toLowerCase()) && recommendation.status !== "approved") return Response.json({ error: "Approve this physical or experience recommendation before anything is ordered." }, { status: 409 });
       const id = crypto.randomUUID();
       await db.insert(rewards).values({ id, organizationId: organization.id, employeeId, eventKey: `manual:${organization.id}:${id}`, recognitionType: String(payload.recognitionType ?? (payload.action === "quickCelebrate" ? "Quick Celebrate" : "Great Work")), message: String(payload.message ?? "Your work made a real difference. Thank you!"), amountCents, status: amountCents > 0 ? "scheduled" : "sent", provider: amountCents > 0 ? "tremendous_sandbox" : "recognition_only", createdAt });
-      if (payload.recommendationId) await db.update(recommendations).set({ status: "approved" }).where(and(eq(recommendations.id, String(payload.recommendationId)), eq(recommendations.organizationId, organization.id)));
+      if (recommendation) await db.update(recommendations).set({ status: "approved" }).where(eq(recommendations.id, recommendation.id));
+      if (payload.action === "quickCelebrate") await db.insert(giftHistory).values({ id: crypto.randomUUID(), organizationId: organization.id, employeeId, recommendationId: recommendation?.id ?? null, title: recommendation?.title ?? (amountCents ? `${amountCents / 100} employee-choice reward` : "Recognition only"), rewardType: recommendation?.rewardType ?? (amountCents ? "digital" : "recognition_only"), occasion: String(payload.recognitionType ?? "Quick Celebrate"), amountCents, status: amountCents > 0 ? "scheduled" : "sent", createdAt });
       await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: payload.action === "quickCelebrate" ? "celebration.quick_sent" : "reward.scheduled", entityType: "reward", entityId: id, metadata: JSON.stringify({ amountCents, liveMode: false }), createdAt });
     } else if (payload.action === "handleEvent") {
       const eventId = String(payload.eventId ?? "");

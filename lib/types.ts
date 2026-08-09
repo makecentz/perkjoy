@@ -128,6 +128,18 @@ export type Recommendation = {
   status: "recommended" | "awaiting_approval" | "approved" | "rejected";
 };
 
+export type GiftHistory = {
+  id: string;
+  employeeId: string;
+  recommendationId: string | null;
+  title: string;
+  rewardType: string;
+  occasion: string;
+  amountCents: number;
+  status: "scheduled" | "sent" | "delivered";
+  createdAt: string;
+};
+
 export type ApprovalRequest = {
   id: string;
   entityType: string;
@@ -171,6 +183,7 @@ export type Workspace = {
   markets: Market[];
   bundles: Bundle[];
   recommendations: Recommendation[];
+  giftHistory: GiftHistory[];
   approvals: ApprovalRequest[];
   conciergeRequests: ConciergeRequest[];
   teamCelebrations: TeamCelebration[];
