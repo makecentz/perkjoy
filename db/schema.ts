@@ -66,6 +66,39 @@ export const rewards = sqliteTable("rewards", {
   index("idx_rewards_org_created").on(table.organizationId, table.createdAt),
 ]);
 
+export const notifications = sqliteTable("notifications", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  type: text("type", { enum: ["upcoming_event", "reward_scheduled", "approval_needed", "reward_sent", "reward_failed", "local_order_confirmed", "delivery_completed", "budget_warning", "automation_run"] }).notNull(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  entityType: text("entity_type"),
+  entityId: text("entity_id"),
+  actionLabel: text("action_label"),
+  actionHref: text("action_href"),
+  readAt: text("read_at"),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  index("idx_notifications_org_created").on(table.organizationId, table.createdAt),
+  index("idx_notifications_org_read").on(table.organizationId, table.readAt),
+]);
+
+export const automationRuns = sqliteTable("automation_runs", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  runKey: text("run_key").notNull(),
+  status: text("status", { enum: ["completed", "completed_with_attention"] }).notNull().default("completed"),
+  rulesEvaluated: integer("rules_evaluated").notNull().default(0),
+  momentsEvaluated: integer("moments_evaluated").notNull().default(0),
+  scheduledCount: integer("scheduled_count").notNull().default(0),
+  approvalCount: integer("approval_count").notNull().default(0),
+  duplicateCount: integer("duplicate_count").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("automation_runs_org_key_unique").on(table.organizationId, table.runKey),
+  index("idx_automation_runs_org_created").on(table.organizationId, table.createdAt),
+]);
+
 export const rewardProviderEvents = sqliteTable("reward_provider_events", {
   id: text("id").primaryKey(),
   provider: text("provider").notNull(),

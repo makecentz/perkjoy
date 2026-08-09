@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { birthdayForYear, celebrationEventKey, isLeapYear, nextAnniversary, nextBirthday } from "../lib/celebrations";
+import { automationEventKey, isAutomationDue, ruleMatchesEvent, timingOffsetDays } from "../lib/automation-engine";
 import { validateBudget } from "../lib/budget";
 import type { Employee } from "../lib/types";
 import { RuleBasedRecommendationProvider } from "../services/recommendations/CelebrationRecommendationService";
@@ -31,6 +32,19 @@ test("builds deterministic keys that prevent duplicate reward events", () => {
   const second = celebrationEventKey("org-1", "employee-1", "birthday", 2026, "rule-1");
   assert.equal(first, second);
   assert.notEqual(first, celebrationEventKey("org-1", "employee-1", "birthday", 2027, "rule-1"));
+});
+
+test("parses automation timing and only runs inside the configured window", () => {
+  assert.equal(timingOffsetDays("14 days before"), 14);
+  assert.equal(timingOffsetDays("On the day"), 0);
+  assert.equal(isAutomationDue("2026-08-14", "7 days before", new Date(2026, 7, 9, 12)), true);
+  assert.equal(isAutomationDue("2026-08-20", "7 days before", new Date(2026, 7, 9, 12)), false);
+});
+
+test("matches rules to moments and creates stable automation keys", () => {
+  assert.equal(ruleMatchesEvent({ eventType: "Work Anniversary" }, { title: "5 Year Anniversary" }), true);
+  assert.equal(ruleMatchesEvent({ eventType: "Birthday" }, { title: "Project Completion" }, "Project Completion"), false);
+  assert.equal(automationEventKey("org-1", "employee-1", "2026-08-14", "rule-1"), automationEventKey("org-1", "employee-1", "2026-08-14", "rule-1"));
 });
 
 test("blocks or warns above-budget rewards according to policy", () => {

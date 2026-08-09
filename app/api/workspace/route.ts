@@ -4,6 +4,7 @@ import {
   approvalRequests,
   approvalPolicies,
   auditLogs,
+  automationRuns,
   automationRules,
   bundleItems,
   bundles,
@@ -18,6 +19,7 @@ import {
   localOrders,
   markets,
   marketplaceListings,
+  notifications,
   organizationLocations,
   organizationSettings,
   organizations,
@@ -32,6 +34,7 @@ import {
 import { hashProfileToken, profileToken } from "@/lib/celebration-profile";
 import { RuleBasedRecommendationProvider } from "@/services/recommendations/CelebrationRecommendationService";
 import { getAutomationTemplate } from "@/lib/automation-templates";
+import { automationEventKey, isAutomationDue, ruleMatchesEvent } from "@/lib/automation-engine";
 
 function identity(request: Request) {
   const id = request.headers.get("oai-authenticated-user-id");
@@ -283,6 +286,12 @@ async function ensureWorkspace(ownerId: string) {
   await ensureDifferentiationData(organization.id);
   const [settings] = await db.select().from(organizationSettings).where(eq(organizationSettings.organizationId, organization.id)).limit(1);
   if (!settings) await db.insert(organizationSettings).values({ organizationId: organization.id, reminderDays: "[30,14,7,3,1]", notificationPreferences: JSON.stringify({ eventReminders: true, budgetAlerts: true, rewardFailures: true, deliveryUpdates: true }), celebrationStyle: "both", selectedTemplate: "birthday-plus", onboardingCompleted: false, updatedAt: createdAt });
+  const [existingNotification] = await db.select().from(notifications).where(eq(notifications.organizationId, organization.id)).limit(1);
+  if (!existingNotification) await db.insert(notifications).values([
+    { id: crypto.randomUUID(), organizationId: organization.id, type: "upcoming_event", title: "Nicole's birthday needs a plan", message: "Her birthday is coming up and no celebration is scheduled yet.", entityType: "employee_event", entityId: `${organization.id}:event:nicole`, actionLabel: "Handle this", actionHref: "/dashboard", readAt: null, createdAt },
+    { id: crypto.randomUUID(), organizationId: organization.id, type: "local_order_confirmed", title: "Sarah's cake is confirmed", message: "The demo bakery has confirmed the order and delivery window.", entityType: "local_order", entityId: null, actionLabel: "View celebrations", actionHref: "/celebrations", readAt: null, createdAt: new Date(Date.now() - 3600000).toISOString() },
+    { id: crypto.randomUUID(), organizationId: organization.id, type: "automation_run", title: "PerkJoy is watching the calendar", message: "Active rules are ready for the next automation run.", entityType: "organization", entityId: organization.id, actionLabel: "Review rules", actionHref: "/rules", readAt: createdAt, createdAt: new Date(Date.now() - 86400000).toISOString() },
+  ]);
   const [subscription] = await db.select().from(subscriptions).where(eq(subscriptions.organizationId, organization.id)).limit(1);
   if (!subscription) await db.insert(subscriptions).values({ id: crypto.randomUUID(), organizationId: organization.id, plan: "Growth", status: "active", monthlyRecurringRevenueCents: 7900, createdAt });
   return organization;
@@ -291,11 +300,13 @@ async function ensureWorkspace(ownerId: string) {
 async function workspace(organizationId: string) {
   const db = getDb();
   const [organization] = await db.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
-  const [settingsRow, employeeRows, ruleRows, rewardRows, productRows, orderRows, typeRows, eventRows, profileRows, preferenceRows, marketRows, locationRows, employeeLocationRows, availabilityRows, listingRows, bundleRows, bundleItemRows, recommendationRows, giftHistoryRows, approvalRows, policyRows, conciergeRows, teamRows, teamParticipantRows] = await Promise.all([
+  const [settingsRow, employeeRows, ruleRows, rewardRows, notificationRows, automationRunRows, productRows, orderRows, typeRows, eventRows, profileRows, preferenceRows, marketRows, locationRows, employeeLocationRows, availabilityRows, listingRows, bundleRows, bundleItemRows, recommendationRows, giftHistoryRows, approvalRows, policyRows, conciergeRows, teamRows, teamParticipantRows] = await Promise.all([
     db.select().from(organizationSettings).where(eq(organizationSettings.organizationId, organizationId)).limit(1),
     db.select().from(employees).where(eq(employees.organizationId, organizationId)).orderBy(employees.firstName),
     db.select().from(automationRules).where(eq(automationRules.organizationId, organizationId)).orderBy(automationRules.createdAt),
     db.select().from(rewards).where(eq(rewards.organizationId, organizationId)).orderBy(desc(rewards.createdAt)),
+    db.select().from(notifications).where(eq(notifications.organizationId, organizationId)).orderBy(desc(notifications.createdAt)).limit(30),
+    db.select().from(automationRuns).where(eq(automationRuns.organizationId, organizationId)).orderBy(desc(automationRuns.createdAt)).limit(10),
     db.select().from(vendorProducts),
     db.select().from(localOrders).where(eq(localOrders.organizationId, organizationId)).orderBy(desc(localOrders.createdAt)),
     db.select().from(celebrationTypes).where(eq(celebrationTypes.organizationId, organizationId)).orderBy(celebrationTypes.category),
@@ -325,7 +336,7 @@ async function workspace(organizationId: string) {
     return [employee.id, marketplaceProducts.filter((product) => product.preferenceTags.some((tag) => food.includes(tag) || rewards.includes(tag))).map((product) => product.id)];
   }));
   return {
-    organization, organizationSettings: settingsRow[0] ? { reminderDays: JSON.parse(settingsRow[0].reminderDays), notificationPreferences: JSON.parse(settingsRow[0].notificationPreferences), celebrationStyle: settingsRow[0].celebrationStyle, selectedTemplate: settingsRow[0].selectedTemplate, onboardingCompleted: settingsRow[0].onboardingCompleted } : { reminderDays: [30,14,7,3,1], notificationPreferences: { eventReminders: true, budgetAlerts: true, rewardFailures: true, deliveryUpdates: true }, celebrationStyle: "both", selectedTemplate: null, onboardingCompleted: false }, employees: employeeRows, rules: ruleRows, rewards: rewardRows, products: marketplaceProducts, localOrders: orderRows,
+    organization, organizationSettings: settingsRow[0] ? { reminderDays: JSON.parse(settingsRow[0].reminderDays), notificationPreferences: JSON.parse(settingsRow[0].notificationPreferences), celebrationStyle: settingsRow[0].celebrationStyle, selectedTemplate: settingsRow[0].selectedTemplate, onboardingCompleted: settingsRow[0].onboardingCompleted } : { reminderDays: [30,14,7,3,1], notificationPreferences: { eventReminders: true, budgetAlerts: true, rewardFailures: true, deliveryUpdates: true }, celebrationStyle: "both", selectedTemplate: null, onboardingCompleted: false }, employees: employeeRows, rules: ruleRows, rewards: rewardRows, notifications: notificationRows, automationRuns: automationRunRows, products: marketplaceProducts, localOrders: orderRows,
     celebrationTypes: typeRows, events: eventRows, profiles: profileRows.map((profile) => ({
       id: profile.id, employeeId: profile.employeeId, inviteExpiresAt: profile.inviteExpiresAt, completeness: profile.completeness,
       privacyMode: profile.privacyMode, workMode: profile.workMode, preferredDelivery: profile.preferredDelivery,
@@ -358,6 +369,7 @@ export async function POST(request: Request) {
     const db = getDb();
     const createdAt = now();
     let profileInviteUrl: string | undefined;
+    let automationResult: { scheduled: number; approvals: number; duplicates: number; evaluated: number } | undefined;
 
     if (payload.action === "addEmployee") {
       const firstName = String(payload.firstName ?? "").trim(); const lastName = String(payload.lastName ?? "").trim(); const email = String(payload.email ?? "").trim().toLowerCase();
@@ -437,6 +449,7 @@ export async function POST(request: Request) {
       if (approval.entityType === "recommendation") await db.update(recommendations).set({ status: "approved" }).where(eq(recommendations.id, approval.entityId));
       if (approval.entityType === "concierge_request") await db.update(conciergeRequests).set({ status: "approved" }).where(eq(conciergeRequests.id, approval.entityId));
       if (approval.entityType === "team_celebration") await db.update(teamCelebrations).set({ status: "approved" }).where(eq(teamCelebrations.id, approval.entityId));
+      if (approval.entityType === "reward") await db.update(rewards).set({ status: "scheduled" }).where(eq(rewards.id, approval.entityId));
       await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "approval.approved", entityType: approval.entityType, entityId: approval.entityId, metadata: JSON.stringify({ amountCents: approval.amountCents }), createdAt });
     } else if (payload.action === "rejectRequest") {
       const approvalId = String(payload.approvalId ?? ""); const [approval] = await db.select().from(approvalRequests).where(and(eq(approvalRequests.id, approvalId), eq(approvalRequests.organizationId, organization.id), eq(approvalRequests.status, "pending"))).limit(1);
@@ -445,6 +458,7 @@ export async function POST(request: Request) {
       if (approval.entityType === "recommendation") await db.update(recommendations).set({ status: "rejected" }).where(eq(recommendations.id, approval.entityId));
       if (approval.entityType === "concierge_request") await db.update(conciergeRequests).set({ status: "planning" }).where(eq(conciergeRequests.id, approval.entityId));
       if (approval.entityType === "team_celebration") await db.update(teamCelebrations).set({ status: "changes_requested" }).where(eq(teamCelebrations.id, approval.entityId));
+      if (approval.entityType === "reward") await db.update(rewards).set({ status: "cancelled" }).where(eq(rewards.id, approval.entityId));
       await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "approval.changes_requested", entityType: approval.entityType, entityId: approval.entityId, metadata: JSON.stringify({ amountCents: approval.amountCents }), createdAt });
     } else if (payload.action === "toggleApprovalPolicy") {
       const policyId = String(payload.policyId ?? ""); const [policy] = await db.select().from(approvalPolicies).where(and(eq(approvalPolicies.id, policyId), eq(approvalPolicies.organizationId, organization.id))).limit(1);
@@ -489,6 +503,62 @@ export async function POST(request: Request) {
       const id = crypto.randomUUID();
       await db.insert(automationRules).values({ id, organizationId: organization.id, name, eventType, rewardType, amountCents, timing: String(payload.timing ?? "7 days before"), active: true, approvalRequired: payload.approvalRequired === true, createdAt });
       await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "automation_rule.created", entityType: "automation_rule", entityId: id, createdAt });
+    } else if (payload.action === "updateRule") {
+      const ruleId = String(payload.ruleId ?? "");
+      const [rule] = await db.select().from(automationRules).where(and(eq(automationRules.id, ruleId), eq(automationRules.organizationId, organization.id))).limit(1);
+      if (!rule) return Response.json({ error: "Rule not found." }, { status: 404 });
+      const name = String(payload.name ?? "").trim(); const eventType = String(payload.eventType ?? "").trim(); const rewardType = String(payload.rewardType ?? "").trim(); const amountCents = Number(payload.amountCents ?? 0); const timing = String(payload.timing ?? "7 days before");
+      if (!name || !eventType || !rewardType || amountCents < 0 || amountCents > 250000) return Response.json({ error: "Add a rule name, event, reward, and valid amount." }, { status: 400 });
+      await db.update(automationRules).set({ name, eventType, rewardType, amountCents, timing, approvalRequired: payload.approvalRequired === true }).where(eq(automationRules.id, ruleId));
+      await db.update(organizationSettings).set({ selectedTemplate: null, updatedAt: createdAt }).where(eq(organizationSettings.organizationId, organization.id));
+      await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "automation_rule.updated", entityType: "automation_rule", entityId: ruleId, metadata: JSON.stringify({ amountCents, timing }), createdAt });
+    } else if (payload.action === "deleteRule") {
+      const ruleId = String(payload.ruleId ?? "");
+      const [rule] = await db.select().from(automationRules).where(and(eq(automationRules.id, ruleId), eq(automationRules.organizationId, organization.id))).limit(1);
+      if (!rule) return Response.json({ error: "Rule not found." }, { status: 404 });
+      await db.delete(automationRules).where(eq(automationRules.id, ruleId));
+      await db.update(organizationSettings).set({ selectedTemplate: null, updatedAt: createdAt }).where(eq(organizationSettings.organizationId, organization.id));
+      await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "automation_rule.deleted", entityType: "automation_rule", entityId: ruleId, metadata: JSON.stringify({ name: rule.name }), createdAt });
+    } else if (payload.action === "runAutomation") {
+      const [activeRules, events, existingRewards, types] = await Promise.all([
+        db.select().from(automationRules).where(and(eq(automationRules.organizationId, organization.id), eq(automationRules.active, true))),
+        db.select().from(employeeEvents).where(eq(employeeEvents.organizationId, organization.id)),
+        db.select().from(rewards).where(eq(rewards.organizationId, organization.id)),
+        db.select().from(celebrationTypes).where(eq(celebrationTypes.organizationId, organization.id)),
+      ]);
+      const existingKeys = new Set(existingRewards.map((reward) => reward.eventKey));
+      let scheduled = 0; let approvals = 0; let duplicates = 0; let evaluated = 0;
+      for (const rule of activeRules) {
+        for (const event of events) {
+          const typeName = types.find((type) => type.id === event.celebrationTypeId)?.name;
+          if (!ruleMatchesEvent(rule, event, typeName) || !isAutomationDue(event.eventDate, rule.timing) || ["delivered", "skipped"].includes(event.status)) continue;
+          evaluated += 1;
+          const eventKey = automationEventKey(organization.id, event.employeeId, event.eventDate, rule.id);
+          if (existingKeys.has(eventKey)) { duplicates += 1; continue; }
+          const rewardId = crypto.randomUUID(); const needsApproval = rule.approvalRequired;
+          const provider = rule.rewardType.toLowerCase().includes("local") ? "local_operations" : rule.amountCents > 0 ? "tremendous_sandbox" : "recognition_only";
+          await db.insert(rewards).values({ id: rewardId, organizationId: organization.id, employeeId: event.employeeId, eventKey, recognitionType: event.title, message: `PerkJoy scheduled ${rule.name} for this moment.`, amountCents: rule.amountCents, status: needsApproval ? "pending_approval" : "scheduled", provider, createdAt });
+          if (needsApproval) {
+            approvals += 1;
+            await db.insert(approvalRequests).values({ id: crypto.randomUUID(), organizationId: organization.id, entityType: "reward", entityId: rewardId, approvalLevel: "admin", amountCents: rule.amountCents, status: "pending", createdAt });
+          } else scheduled += 1;
+          await db.update(employeeEvents).set({ status: needsApproval ? "approval_required" : "scheduled", rewardSummary: `${rule.rewardType} · $${(rule.amountCents / 100).toFixed(0)} ${needsApproval ? "awaiting approval" : "scheduled"}`, handledSteps: JSON.stringify(needsApproval ? ["Rule matched", "Approval requested"] : ["Rule matched", "Reward scheduled", "Duplicate protection active"]) }).where(eq(employeeEvents.id, event.id));
+          await db.insert(notifications).values({ id: crypto.randomUUID(), organizationId: organization.id, type: needsApproval ? "approval_needed" : "reward_scheduled", title: needsApproval ? `${event.title} needs approval` : `${event.title} is handled`, message: `${rule.name} matched automatically. ${needsApproval ? "Review it before anything is purchased." : "The reward is scheduled in sandbox mode."}`, entityType: "employee_event", entityId: event.id, actionLabel: needsApproval ? "Review approval" : "View celebration", actionHref: needsApproval ? "/team" : "/celebrations", readAt: null, createdAt });
+          existingKeys.add(eventKey);
+        }
+      }
+      const runId = crypto.randomUUID(); const runKey = `manual:${createdAt}`;
+      await db.insert(automationRuns).values({ id: runId, organizationId: organization.id, runKey, status: approvals ? "completed_with_attention" : "completed", rulesEvaluated: activeRules.length, momentsEvaluated: evaluated, scheduledCount: scheduled, approvalCount: approvals, duplicateCount: duplicates, createdAt });
+      await db.insert(notifications).values({ id: crypto.randomUUID(), organizationId: organization.id, type: "automation_run", title: scheduled + approvals ? `${scheduled + approvals} moment${scheduled + approvals === 1 ? "" : "s"} moved forward` : "Automation check complete", message: `${activeRules.length} active rules checked. ${scheduled} scheduled, ${approvals} awaiting approval, ${duplicates} duplicates safely skipped.`, entityType: "automation_run", entityId: runId, actionLabel: "Review rules", actionHref: "/rules", readAt: null, createdAt });
+      await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "automation.run_completed", entityType: "automation_run", entityId: runId, metadata: JSON.stringify({ scheduled, approvals, duplicates, evaluated }), createdAt });
+      automationResult = { scheduled, approvals, duplicates, evaluated };
+    } else if (payload.action === "markNotificationRead") {
+      const notificationId = String(payload.notificationId ?? "");
+      const [notification] = await db.select().from(notifications).where(and(eq(notifications.id, notificationId), eq(notifications.organizationId, organization.id))).limit(1);
+      if (!notification) return Response.json({ error: "Notification not found." }, { status: 404 });
+      await db.update(notifications).set({ readAt: createdAt }).where(eq(notifications.id, notificationId));
+    } else if (payload.action === "markAllNotificationsRead") {
+      await db.update(notifications).set({ readAt: createdAt }).where(eq(notifications.organizationId, organization.id));
     } else if (payload.action === "saveReminderSettings") {
       const allowedDays = [30,14,7,3,1]; const reminderDays = [...new Set(Array.isArray(payload.reminderDays) ? payload.reminderDays.map(Number) : [])].filter((day) => allowedDays.includes(day)).sort((a,b) => b-a);
       if (!reminderDays.length) return Response.json({ error: "Choose at least one reminder day." }, { status: 400 });
@@ -542,7 +612,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Unknown action." }, { status: 400 });
     }
 
-    return Response.json({ ...await workspace(organization.id), profileInviteUrl });
+    return Response.json({ ...await workspace(organization.id), profileInviteUrl, automationResult });
   } catch (error) {
     console.error("workspace_mutation_failed", error);
     const message = error instanceof Error && error.message.includes("UNIQUE") ? "That record already exists." : "We couldn't save that change. Nothing was charged.";

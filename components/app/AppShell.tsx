@@ -13,6 +13,7 @@ import { Logo } from "@/components/brand/Logo";
 import { nextAnniversary, nextBirthday } from "@/lib/celebrations";
 import { automationTemplates } from "@/lib/automation-templates";
 import type { Employee, Product, Workspace } from "@/lib/types";
+import { AutomationOperations, NotificationCenter } from "@/components/app/PhaseHControls";
 
 type View = "dashboard" | "employees" | "celebrations" | "rewards" | "perkjoy-local" | "rules" | "reports" | "team" | "billing" | "settings";
 
@@ -40,6 +41,7 @@ export function AppShell({ view = "dashboard" }: { view?: View }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
   const [modal, setModal] = useState<"employee" | "recognize" | "quick" | "concierge" | "order" | "team" | "rule" | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<string>("");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -107,7 +109,7 @@ export function AppShell({ view = "dashboard" }: { view?: View }) {
       {mobileOpen && <button className="sidebar-overlay" onClick={() => setMobileOpen(false)} aria-label="Close navigation" />}
 
       <section className="app-workspace">
-        <header className="app-topbar"><button className="mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><Menu /></button><div className="company-switcher"><span>PC</span><b>{data?.organization.name}</b><ChevronDown /></div><div className="topbar-actions"><button aria-label="Search"><Search /></button><button className="notification-button" aria-label="Notifications"><Bell /><i /></button><button className="button button-primary recognize-top" onClick={() => { setSelectedEmployee(data?.employees[0]?.id ?? ""); setModal("recognize"); }}><Plus /> Celebrate Someone</button></div></header>
+        <header className="app-topbar"><button className="mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><Menu /></button><div className="company-switcher"><span>PC</span><b>{data?.organization.name}</b><ChevronDown /></div><div className="topbar-actions"><button aria-label="Search"><Search /></button><button className="notification-button" onClick={() => setNotificationOpen(true)} aria-label={`Notifications${data?.notifications.filter((item) => !item.readAt).length ? `, ${data.notifications.filter((item) => !item.readAt).length} unread` : ""}`}><Bell />{data?.notifications.some((item) => !item.readAt) && <i />}</button><button className="button button-primary recognize-top" onClick={() => { setSelectedEmployee(data?.employees[0]?.id ?? ""); setModal("recognize"); }}><Plus /> Celebrate Someone</button></div></header>
         <main className="app-content">
           {error && <div className="app-error"><span>{error}</span><button onClick={load}>Try again</button></div>}
           {data && <ViewContent view={view} data={data} celebrations={celebrations} mutate={mutate} openEmployee={() => setModal("employee")} openRecognize={(id) => { setSelectedEmployee(id ?? data.employees[0]?.id ?? ""); setModal("recognize"); }} openQuick={(id) => { setSelectedEmployee(id ?? data.employees[0]?.id ?? ""); setModal("quick"); }} openConcierge={(id) => { setSelectedEmployee(id ?? data.employees[0]?.id ?? ""); setModal("concierge"); }} openOrder={(product) => { setSelectedProduct(product); setSelectedEmployee(data.employees[0]?.id ?? ""); setModal("order"); }} openTeam={() => setModal("team")} openRule={() => setModal("rule")} />}
@@ -123,6 +125,7 @@ export function AppShell({ view = "dashboard" }: { view?: View }) {
       {modal === "order" && data && selectedProduct && <OrderModal employees={data.employees} product={selectedProduct} selected={selectedEmployee} setSelected={setSelectedEmployee} busy={busy} close={() => setModal(null)} submit={mutate} />}
       {modal === "team" && data && <TeamCelebrationModal employees={data.employees} busy={busy} close={() => setModal(null)} submit={mutate} />}
       {modal === "rule" && data && <RuleModal celebrationTypes={data.celebrationTypes} busy={busy} close={() => setModal(null)} submit={mutate} />}
+      {notificationOpen && data && <NotificationCenter data={data} close={() => setNotificationOpen(false)} mutate={mutate} />}
     </div>
   );
 }
@@ -133,7 +136,7 @@ function ViewContent({ view, data, celebrations, mutate, openEmployee, openRecog
   if (view === "celebrations") return <CelebrationsView data={data} mutate={mutate} />;
   if (view === "rewards") return <RewardsView data={data} openRecognize={openRecognize} />;
   if (view === "perkjoy-local") return <PhaseDLocalView data={data} openOrder={openOrder} openConcierge={openConcierge} />;
-  if (view === "rules") return <RulesView data={data} mutate={mutate} openRule={openRule} />;
+  if (view === "rules") return <><RulesView data={data} mutate={mutate} openRule={openRule} /><AutomationOperations data={data} mutate={mutate} /></>;
   if (view === "reports") return <ReportsView data={data} />;
   if (view === "team") return <PhaseETeamView data={data} mutate={mutate} openTeam={openTeam} />;
   if (view === "billing") return <BillingView />;

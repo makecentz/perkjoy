@@ -50,6 +50,13 @@
       "when": 1786284858716,
       "tag": "0006_windy_the_phantom",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1786288292025,
+      "tag": "0007_tidy_lockjaw",
+      "breakpoints": true
     }
   ]
 }

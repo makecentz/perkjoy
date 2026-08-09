@@ -36,6 +36,31 @@ export type Reward = {
   createdAt: string;
 };
 
+export type Notification = {
+  id: string;
+  type: "upcoming_event" | "reward_scheduled" | "approval_needed" | "reward_sent" | "reward_failed" | "local_order_confirmed" | "delivery_completed" | "budget_warning" | "automation_run";
+  title: string;
+  message: string;
+  entityType: string | null;
+  entityId: string | null;
+  actionLabel: string | null;
+  actionHref: string | null;
+  readAt: string | null;
+  createdAt: string;
+};
+
+export type AutomationRun = {
+  id: string;
+  runKey: string;
+  status: "completed" | "completed_with_attention";
+  rulesEvaluated: number;
+  momentsEvaluated: number;
+  scheduledCount: number;
+  approvalCount: number;
+  duplicateCount: number;
+  createdAt: string;
+};
+
 export type Product = {
   id: string;
   vendorName: string;
@@ -211,6 +236,8 @@ export type Workspace = {
   employees: Employee[];
   rules: Rule[];
   rewards: Reward[];
+  notifications: Notification[];
+  automationRuns: AutomationRun[];
   products: Product[];
   localOrders: LocalOrder[];
   celebrationTypes: CelebrationType[];
