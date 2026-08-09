@@ -100,6 +100,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" | "forgot" }) {
           {mode !== "forgot" && <div className="demo-entry">
             <span>or</span>
             <Link className="button button-secondary" href="/dashboard"><Gift /> Explore the demo workspace</Link>
+            {mode === "signup" && <Link className="guided-setup-link" href="/onboarding"><Sparkles /> Preview the guided setup</Link>}
           </div>}
           <footer>
             {mode === "login" ? <>New to PerkJoy? <Link href="/signup">Start trial</Link></> : mode === "signup" ? <>Already have an account? <Link href="/login">Log in</Link></> : <Link href="/login">← Back to login</Link>}

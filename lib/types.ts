@@ -201,6 +201,13 @@ export type TeamCelebration = {
 
 export type Workspace = {
   organization: { id: string; name: string; timezone: string; monthlyBudgetCents: number };
+  organizationSettings: {
+    reminderDays: number[];
+    notificationPreferences: { eventReminders: boolean; budgetAlerts: boolean; rewardFailures: boolean; deliveryUpdates: boolean };
+    celebrationStyle: "digital" | "local" | "both";
+    selectedTemplate: string | null;
+    onboardingCompleted: boolean;
+  };
   employees: Employee[];
   rules: Rule[];
   rewards: Reward[];

@@ -19,6 +19,7 @@ import {
   markets,
   marketplaceListings,
   organizationLocations,
+  organizationSettings,
   organizations,
   recommendations,
   rewards,
@@ -30,6 +31,7 @@ import {
 } from "@/db/schema";
 import { hashProfileToken, profileToken } from "@/lib/celebration-profile";
 import { RuleBasedRecommendationProvider } from "@/services/recommendations/CelebrationRecommendationService";
+import { getAutomationTemplate } from "@/lib/automation-templates";
 
 function identity(request: Request) {
   const id = request.headers.get("oai-authenticated-user-id");
@@ -279,6 +281,8 @@ async function ensureWorkspace(ownerId: string) {
 
   await ensureProducts();
   await ensureDifferentiationData(organization.id);
+  const [settings] = await db.select().from(organizationSettings).where(eq(organizationSettings.organizationId, organization.id)).limit(1);
+  if (!settings) await db.insert(organizationSettings).values({ organizationId: organization.id, reminderDays: "[30,14,7,3,1]", notificationPreferences: JSON.stringify({ eventReminders: true, budgetAlerts: true, rewardFailures: true, deliveryUpdates: true }), celebrationStyle: "both", selectedTemplate: "birthday-plus", onboardingCompleted: false, updatedAt: createdAt });
   const [subscription] = await db.select().from(subscriptions).where(eq(subscriptions.organizationId, organization.id)).limit(1);
   if (!subscription) await db.insert(subscriptions).values({ id: crypto.randomUUID(), organizationId: organization.id, plan: "Growth", status: "active", monthlyRecurringRevenueCents: 7900, createdAt });
   return organization;
@@ -287,7 +291,8 @@ async function ensureWorkspace(ownerId: string) {
 async function workspace(organizationId: string) {
   const db = getDb();
   const [organization] = await db.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
-  const [employeeRows, ruleRows, rewardRows, productRows, orderRows, typeRows, eventRows, profileRows, preferenceRows, marketRows, locationRows, employeeLocationRows, availabilityRows, listingRows, bundleRows, bundleItemRows, recommendationRows, giftHistoryRows, approvalRows, policyRows, conciergeRows, teamRows, teamParticipantRows] = await Promise.all([
+  const [settingsRow, employeeRows, ruleRows, rewardRows, productRows, orderRows, typeRows, eventRows, profileRows, preferenceRows, marketRows, locationRows, employeeLocationRows, availabilityRows, listingRows, bundleRows, bundleItemRows, recommendationRows, giftHistoryRows, approvalRows, policyRows, conciergeRows, teamRows, teamParticipantRows] = await Promise.all([
+    db.select().from(organizationSettings).where(eq(organizationSettings.organizationId, organizationId)).limit(1),
     db.select().from(employees).where(eq(employees.organizationId, organizationId)).orderBy(employees.firstName),
     db.select().from(automationRules).where(eq(automationRules.organizationId, organizationId)).orderBy(automationRules.createdAt),
     db.select().from(rewards).where(eq(rewards.organizationId, organizationId)).orderBy(desc(rewards.createdAt)),
@@ -320,7 +325,7 @@ async function workspace(organizationId: string) {
     return [employee.id, marketplaceProducts.filter((product) => product.preferenceTags.some((tag) => food.includes(tag) || rewards.includes(tag))).map((product) => product.id)];
   }));
   return {
-    organization, employees: employeeRows, rules: ruleRows, rewards: rewardRows, products: marketplaceProducts, localOrders: orderRows,
+    organization, organizationSettings: settingsRow[0] ? { reminderDays: JSON.parse(settingsRow[0].reminderDays), notificationPreferences: JSON.parse(settingsRow[0].notificationPreferences), celebrationStyle: settingsRow[0].celebrationStyle, selectedTemplate: settingsRow[0].selectedTemplate, onboardingCompleted: settingsRow[0].onboardingCompleted } : { reminderDays: [30,14,7,3,1], notificationPreferences: { eventReminders: true, budgetAlerts: true, rewardFailures: true, deliveryUpdates: true }, celebrationStyle: "both", selectedTemplate: null, onboardingCompleted: false }, employees: employeeRows, rules: ruleRows, rewards: rewardRows, products: marketplaceProducts, localOrders: orderRows,
     celebrationTypes: typeRows, events: eventRows, profiles: profileRows.map((profile) => ({
       id: profile.id, employeeId: profile.employeeId, inviteExpiresAt: profile.inviteExpiresAt, completeness: profile.completeness,
       privacyMode: profile.privacyMode, workMode: profile.workMode, preferredDelivery: profile.preferredDelivery,
@@ -471,6 +476,40 @@ export async function POST(request: Request) {
       if (budgetCents < 2500 || budgetCents > 250000) return Response.json({ error: "Choose a concierge budget between $25 and $2,500." }, { status: 400 });
       await db.insert(conciergeRequests).values({ id, organizationId: organization.id, employeeId, occasion: String(payload.occasion ?? "Custom Celebration"), budgetCents, deliveryDate: String(payload.deliveryDate ?? daysFromNow(7)), status: "submitted", recommendation: null, serviceFeeCents: 4900, createdAt });
       await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "concierge.submitted", entityType: "concierge_request", entityId: id, createdAt });
+    } else if (payload.action === "applyAutomationTemplate") {
+      const template = getAutomationTemplate(String(payload.templateId ?? ""));
+      if (!template) return Response.json({ error: "Automation template not found." }, { status: 404 });
+      await db.delete(automationRules).where(eq(automationRules.organizationId, organization.id));
+      await db.insert(automationRules).values(template.rules.map((rule) => ({ id: crypto.randomUUID(), organizationId: organization.id, ...rule, active: true, createdAt })));
+      await db.update(organizationSettings).set({ selectedTemplate: template.id, updatedAt: createdAt }).where(eq(organizationSettings.organizationId, organization.id));
+      await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "automation_template.applied", entityType: "organization", entityId: organization.id, metadata: JSON.stringify({ templateId: template.id, ruleCount: template.rules.length }), createdAt });
+    } else if (payload.action === "createRule") {
+      const name = String(payload.name ?? "").trim(); const eventType = String(payload.eventType ?? "").trim(); const rewardType = String(payload.rewardType ?? "").trim(); const amountCents = Number(payload.amountCents ?? 0);
+      if (!name || !eventType || !rewardType || amountCents < 0 || amountCents > 250000) return Response.json({ error: "Add a rule name, event, reward, and valid amount." }, { status: 400 });
+      const id = crypto.randomUUID();
+      await db.insert(automationRules).values({ id, organizationId: organization.id, name, eventType, rewardType, amountCents, timing: String(payload.timing ?? "7 days before"), active: true, approvalRequired: payload.approvalRequired === true, createdAt });
+      await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "automation_rule.created", entityType: "automation_rule", entityId: id, createdAt });
+    } else if (payload.action === "saveReminderSettings") {
+      const allowedDays = [30,14,7,3,1]; const reminderDays = [...new Set(Array.isArray(payload.reminderDays) ? payload.reminderDays.map(Number) : [])].filter((day) => allowedDays.includes(day)).sort((a,b) => b-a);
+      if (!reminderDays.length) return Response.json({ error: "Choose at least one reminder day." }, { status: 400 });
+      const preferences = payload.notificationPreferences && typeof payload.notificationPreferences === "object" ? payload.notificationPreferences as Record<string, unknown> : {};
+      const notificationPreferences = { eventReminders: preferences.eventReminders !== false, budgetAlerts: preferences.budgetAlerts !== false, rewardFailures: preferences.rewardFailures !== false, deliveryUpdates: preferences.deliveryUpdates !== false };
+      await db.update(organizationSettings).set({ reminderDays: JSON.stringify(reminderDays), notificationPreferences: JSON.stringify(notificationPreferences), updatedAt: createdAt }).where(eq(organizationSettings.organizationId, organization.id));
+      await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "reminders.updated", entityType: "organization", entityId: organization.id, metadata: JSON.stringify({ reminderDays, notificationPreferences }), createdAt });
+    } else if (payload.action === "completeOnboarding") {
+      const companyName = String(payload.companyName ?? "").trim(); const monthlyBudgetCents = Number(payload.monthlyBudgetCents ?? 0); const celebrationStyle = String(payload.celebrationStyle ?? "both") as "digital" | "local" | "both"; const template = getAutomationTemplate(String(payload.templateId ?? ""));
+      if (!companyName || monthlyBudgetCents < 0 || monthlyBudgetCents > 100000000 || !["digital","local","both"].includes(celebrationStyle) || !template) return Response.json({ error: "Complete every setup step before previewing your workspace." }, { status: 400 });
+      const requestedTypeIds = [...new Set(Array.isArray(payload.celebrationTypeIds) ? payload.celebrationTypeIds.map(String) : [])];
+      const organizationTypes = await db.select().from(celebrationTypes).where(eq(celebrationTypes.organizationId, organization.id));
+      const validTypeIds = requestedTypeIds.filter((id) => organizationTypes.some((type) => type.id === id));
+      if (!validTypeIds.length || validTypeIds.length !== requestedTypeIds.length) return Response.json({ error: "Choose at least one celebration type." }, { status: 400 });
+      await db.update(organizations).set({ name: companyName, monthlyBudgetCents }).where(eq(organizations.id, organization.id));
+      await db.update(celebrationTypes).set({ active: false }).where(eq(celebrationTypes.organizationId, organization.id));
+      for (const typeId of validTypeIds) await db.update(celebrationTypes).set({ active: true }).where(and(eq(celebrationTypes.id, typeId), eq(celebrationTypes.organizationId, organization.id)));
+      await db.delete(automationRules).where(eq(automationRules.organizationId, organization.id));
+      await db.insert(automationRules).values(template.rules.map((rule) => ({ id: crypto.randomUUID(), organizationId: organization.id, ...rule, active: true, createdAt })));
+      await db.update(organizationSettings).set({ celebrationStyle, selectedTemplate: template.id, onboardingCompleted: true, updatedAt: createdAt }).where(eq(organizationSettings.organizationId, organization.id));
+      await db.insert(auditLogs).values({ id: crypto.randomUUID(), organizationId: organization.id, actorId: ownerId, action: "onboarding.completed", entityType: "organization", entityId: organization.id, metadata: JSON.stringify({ templateId: template.id, celebrationStyle, celebrationTypes: validTypeIds.length }), createdAt });
     } else if (payload.action === "toggleRule") {
       const ruleId = String(payload.ruleId ?? ""); const [rule] = await db.select().from(automationRules).where(and(eq(automationRules.id, ruleId), eq(automationRules.organizationId, organization.id))).limit(1);
       if (!rule) return Response.json({ error: "Rule not found." }, { status: 404 });

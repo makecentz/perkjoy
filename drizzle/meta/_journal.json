@@ -43,6 +43,13 @@
       "when": 1786283819850,
       "tag": "0005_ordinary_black_panther",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1786284858716,
+      "tag": "0006_windy_the_phantom",
+      "breakpoints": true
     }
   ]
 }

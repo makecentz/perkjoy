@@ -15,6 +15,7 @@ export function getDb() {
 const runtimeSchema = [
   `CREATE TABLE IF NOT EXISTS organizations (id text PRIMARY KEY NOT NULL, owner_id text NOT NULL, name text NOT NULL, timezone text DEFAULT 'America/New_York' NOT NULL, monthly_budget_cents integer DEFAULT 50000 NOT NULL, created_at text NOT NULL)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS organizations_owner_id_unique ON organizations (owner_id)`,
+  `CREATE TABLE IF NOT EXISTS organization_settings (organization_id text PRIMARY KEY NOT NULL REFERENCES organizations(id) ON DELETE cascade, reminder_days text DEFAULT '[30,14,7,3,1]' NOT NULL, notification_preferences text DEFAULT '{"eventReminders":true,"budgetAlerts":true,"rewardFailures":true,"deliveryUpdates":true}' NOT NULL, celebration_style text DEFAULT 'both' NOT NULL, selected_template text, onboarding_completed integer DEFAULT false NOT NULL, updated_at text NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS employees (id text PRIMARY KEY NOT NULL, organization_id text NOT NULL REFERENCES organizations(id) ON DELETE cascade, first_name text NOT NULL, last_name text NOT NULL, email text NOT NULL, department text NOT NULL, job_title text DEFAULT 'Team Member' NOT NULL, birthday_month integer NOT NULL, birthday_day integer NOT NULL, hire_date text NOT NULL, status text DEFAULT 'active' NOT NULL, created_at text NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS idx_employees_org_status ON employees (organization_id,status)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS employees_org_email_unique ON employees (organization_id,email)`,

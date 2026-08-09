@@ -9,6 +9,16 @@ export const organizations = sqliteTable("organizations", {
   createdAt: text("created_at").notNull(),
 }, (table) => [uniqueIndex("organizations_owner_id_unique").on(table.ownerId)]);
 
+export const organizationSettings = sqliteTable("organization_settings", {
+  organizationId: text("organization_id").primaryKey().references(() => organizations.id, { onDelete: "cascade" }),
+  reminderDays: text("reminder_days").notNull().default("[30,14,7,3,1]"),
+  notificationPreferences: text("notification_preferences").notNull().default("{\"eventReminders\":true,\"budgetAlerts\":true,\"rewardFailures\":true,\"deliveryUpdates\":true}"),
+  celebrationStyle: text("celebration_style", { enum: ["digital", "local", "both"] }).notNull().default("both"),
+  selectedTemplate: text("selected_template"),
+  onboardingCompleted: integer("onboarding_completed", { mode: "boolean" }).notNull().default(false),
+  updatedAt: text("updated_at").notNull(),
+});
+
 export const employees = sqliteTable("employees", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
