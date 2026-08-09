@@ -12,6 +12,30 @@ export function AuthForm({ mode }: { mode: "login" | "signup" | "forgot" }) {
   const [busy, setBusy] = useState(false);
   const configured = isSupabaseConfigured();
 
+  async function continueWithGoogle() {
+    setBusy(true);
+    setMessage("");
+    if (!configured) {
+      setMessage("Supabase is not configured for this deployment.");
+      setBusy(false);
+      return;
+    }
+
+    const next = mode === "signup" ? "/onboarding" : "/dashboard";
+    const { error } = await createBrowserSupabaseClient().auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        queryParams: { prompt: "select_account" },
+      },
+    });
+
+    if (error) {
+      setMessage(error.message);
+      setBusy(false);
+    }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -82,6 +106,12 @@ export function AuthForm({ mode }: { mode: "login" | "signup" | "forgot" }) {
           <small>{mode === "signup" ? "START YOUR PERKJOY WORKSPACE" : mode === "forgot" ? "RESET YOUR PASSWORD" : "WELCOME BACK"}</small>
           <h2>{mode === "signup" ? "Create your PerkJoy account" : mode === "forgot" ? "Forgot your password?" : "Log in to PerkJoy"}</h2>
           <p>{mode === "signup" ? "A credit card is required to activate your workspace." : mode === "forgot" ? "We'll send a secure reset link to your work email." : "Your team's next celebration is waiting."}</p>
+          {mode !== "forgot" && <div className="oauth-entry">
+            <button className="button oauth-google" type="button" onClick={continueWithGoogle} disabled={busy}>
+              <span aria-hidden="true">G</span>{mode === "signup" ? "Sign up with Google" : "Continue with Google"}
+            </button>
+            <span>or continue with email</span>
+          </div>}
           <form onSubmit={submit}>
             {mode === "signup" && <>
               <div className="form-grid">
