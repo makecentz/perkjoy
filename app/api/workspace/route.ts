@@ -1,6 +1,5 @@
 import { authenticateSupabaseRequest, isServerSupabaseConfigured } from "@/lib/supabase/request";
 import { getSupabaseWorkspace, mutateSupabaseWorkspace } from "@/lib/supabase/workspace";
-import { GET as getD1Workspace, POST as mutateD1Workspace } from "./d1-route";
 
 function userError(reason: unknown) {
   const message = reason instanceof Error ? reason.message : "We couldn't complete that request.";
@@ -9,7 +8,7 @@ function userError(reason: unknown) {
   return message;
 }
 export async function GET(request: Request) {
-  if (!isServerSupabaseConfigured()) return getD1Workspace(request);
+  if (!isServerSupabaseConfigured()) return Response.json({ error: "Supabase is not configured for this deployment." }, { status: 503 });
   const auth = await authenticateSupabaseRequest(request);
   if (!auth) return Response.json({ error: "Sign in to open your PerkJoy workspace." }, { status: 401 });
 
@@ -24,7 +23,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!isServerSupabaseConfigured()) return mutateD1Workspace(request);
+  if (!isServerSupabaseConfigured()) return Response.json({ error: "Supabase is not configured for this deployment." }, { status: 503 });
   const auth = await authenticateSupabaseRequest(request);
   if (!auth) return Response.json({ error: "Sign in to continue." }, { status: 401 });
 

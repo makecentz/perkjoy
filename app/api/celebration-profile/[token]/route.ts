@@ -1,7 +1,6 @@
 import { allowedStrings, PROFILE_DIETARY, PROFILE_INTERESTS, PROFILE_REWARD_TYPES, PROFILE_SHIRT_SIZES, profileCompleteness } from "@/lib/celebration-profile";
 import type { Json } from "@/lib/supabase/database.types";
 import { isServerSupabaseConfigured } from "@/lib/supabase/request";
-import { GET as getD1Profile, POST as updateD1Profile } from "./d1-route";
 
 type RouteContext = { params: Promise<{ token: string }> };
 
@@ -18,7 +17,8 @@ async function profileFunction(body: Record<string, unknown>) {
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  if (!isServerSupabaseConfigured()) return getD1Profile(request, context);
+  void request;
+  if (!isServerSupabaseConfigured()) return Response.json({ error: "Supabase is not configured for this deployment." }, { status: 503 });
   const { token } = await context.params;
   const response = await profileFunction({ action: "read", token });
   if (!response.ok) {
@@ -32,7 +32,7 @@ export async function GET(request: Request, context: RouteContext) {
 }
 
 export async function POST(request: Request, context: RouteContext) {
-  if (!isServerSupabaseConfigured()) return updateD1Profile(request, context);
+  if (!isServerSupabaseConfigured()) return Response.json({ error: "Supabase is not configured for this deployment." }, { status: 503 });
   const { token } = await context.params;
   let payload: Record<string, unknown>;
   try {
