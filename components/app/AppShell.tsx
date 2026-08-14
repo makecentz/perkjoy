@@ -1901,8 +1901,8 @@ function StripeConnectPanel() {
             const ready = vendor.chargesEnabled && vendor.payoutsEnabled;
             return <article key={vendor.id}>
               <span className={ready ? "ready" : vendor.connected ? "pending" : "not-connected"}><i />{ready ? "Ready" : vendor.connected ? "Needs information" : "Not connected"}</span>
-              <div><b>{vendor.name}</b><small>{vendor.email || "Add a vendor email before onboarding"}</small></div>
-              <button type="button" className="button button-primary" onClick={() => void connect(vendor.id)} disabled={connecting === vendor.id || !vendor.email}>
+              <div><b>{vendor.name}</b><small>{vendor.email || "Stripe will collect the vendor's email during onboarding"}</small></div>
+              <button type="button" className="button button-primary" onClick={() => void connect(vendor.id)} disabled={connecting === vendor.id}>
                 {connecting === vendor.id ? "Opening Stripe…" : ready ? "Manage account" : vendor.connected ? "Continue onboarding" : "Connect Stripe"}
               </button>
             </article>;
