@@ -3,6 +3,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   AlertTriangle,
   Award,
@@ -46,6 +47,7 @@ import { authenticatedFetch } from "@/lib/supabase/fetch";
 import { EmployeesExperience } from "@/components/employees/EmployeesExperience";
 import { RewardHistoryPage } from "@/components/app/SecondaryPages";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import type { GoodyCatalogProduct } from "@/lib/goody/client";
 
 type View =
   | "dashboard"
@@ -1357,6 +1359,25 @@ function RewardsView({
   data: Workspace;
   openRecognize: (id?: string) => void;
 }) {
+  const [goodyProducts, setGoodyProducts] = useState<GoodyCatalogProduct[]>([]);
+  const [goodyLoading, setGoodyLoading] = useState(true);
+  const [goodyError, setGoodyError] = useState("");
+  const [selectedGoody, setSelectedGoody] = useState<GoodyCatalogProduct | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    authenticatedFetch("/api/goody/products", { cache: "no-store" })
+      .then(async (response) => {
+        const json = await response.json() as { products?: GoodyCatalogProduct[]; error?: string };
+        if (!response.ok) throw new Error(json.error || "Unable to load Goody rewards.");
+        if (active) setGoodyProducts(json.products ?? []);
+      })
+      .catch((reason) => active && setGoodyError(reason instanceof Error ? reason.message : "Unable to load Goody rewards."))
+      .finally(() => active && setGoodyLoading(false));
+    return () => { active = false; };
+  }, []);
+
+  const canPurchase = data.access.roles.some((role) => role === "SUPER_ADMIN" || role === "ADMIN");
   return (
     <>
       <PageHeader
@@ -1437,17 +1458,135 @@ function RewardsView({
           );
         })}
       </section>
-      <div className="sandbox-note">
+      <section className="goody-catalog-section">
+        <div className="card-head">
+          <div>
+            <small>GOODY REWARD MARKETPLACE</small>
+            <h2>Send a gift they can unwrap online</h2>
+            <p>Goody emails the recipient a gift link. They choose where it ships and can swap eligible gifts.</p>
+          </div>
+          <span className="goody-live-badge"><i /> Live catalog</span>
+        </div>
+        {goodyLoading && <div className="goody-catalog-message">Loading Goody rewards…</div>}
+        {goodyError && <div className="app-error"><span>{goodyError}</span></div>}
+        {!goodyLoading && !goodyError && (
+          <div className="goody-catalog-grid">
+            {goodyProducts.slice(0, 12).map((product) => (
+              <article key={product.id}>
+                <div className="goody-product-image">
+                  {product.imageUrl ? <Image src={product.imageUrl} alt="" fill sizes="(max-width: 760px) 100vw, (max-width: 1180px) 50vw, 25vw" unoptimized /> : <Gift />}
+                  <span>Goody</span>
+                </div>
+                <div>
+                  <small>{product.brandName}</small>
+                  <h3>{product.name}</h3>
+                  <p>{product.description}</p>
+                  <div className="goody-price">
+                    <b>{product.variablePrice ? "From " : ""}{money(product.priceCents)}</b>
+                    {product.shippingCents > 0 && <small>+ {money(product.shippingCents)} shipping</small>}
+                  </div>
+                  <button className="button button-primary" disabled={!canPurchase} onClick={() => setSelectedGoody(product)}>
+                    {canPurchase ? "Send this reward" : "Admin purchase required"}
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+      <div className="sandbox-note goody-production-note">
         <ShieldCheck />{" "}
         <div>
-          <b>Safe development mode is on</b>
+          <b>Goody production gifting is connected</b>
           <p>
-            Digital rewards use Tremendous Sandbox and are clearly marked as
-            TEST. Production endpoints are blocked.
+            The catalog is live. A Goody purchase is only made after an authorized admin reviews and confirms the recipient and total.
           </p>
         </div>
       </div>
+      {selectedGoody && (
+        <GoodyOrderModal
+          data={data}
+          product={selectedGoody}
+          close={() => setSelectedGoody(null)}
+        />
+      )}
     </>
+  );
+}
+
+function GoodyOrderModal({ data, product, close }: { data: Workspace; product: GoodyCatalogProduct; close: () => void }) {
+  const [employeeId, setEmployeeId] = useState(data.employees[0]?.id ?? "");
+  const [message, setMessage] = useState("Thank you for everything you do!");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [giftLink, setGiftLink] = useState<string | null>(null);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const response = await authenticatedFetch("/api/goody/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId, productId: product.id, message, requestId: crypto.randomUUID() }),
+      });
+      const result = await response.json() as { giftLink?: string | null; error?: string };
+      if (!response.ok) throw new Error(result.error || "Unable to send this Goody reward.");
+      setGiftLink(result.giftLink ?? null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to send this Goody reward.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (giftLink) {
+    return (
+      <ModalShell title="Goody reward sent" description="Goody emailed the gift to the recipient. You can also open or copy the gift link." close={close}>
+        <div className="goody-success">
+          <CheckCircle2 />
+          <h3>Gift created successfully</h3>
+          <p>The reward is now tracked in PerkJoy. Goody webhook updates will keep its delivery status current.</p>
+          <div>
+            <a className="button button-primary" href={giftLink} target="_blank" rel="noreferrer">Open gift link</a>
+            <button className="button button-secondary" type="button" onClick={() => navigator.clipboard.writeText(giftLink)}>Copy link</button>
+          </div>
+        </div>
+      </ModalShell>
+    );
+  }
+
+  return (
+    <ModalShell title="Send with Goody" description="This uses the live Goody account and may create a real charge." close={close}>
+      <form onSubmit={submit}>
+        <div className="selected-product goody-selected-product">
+          <Gift />
+          <div><small>{product.brandName}</small><b>{product.name}</b><p>Recipient enters their shipping address</p></div>
+          <b>{product.variablePrice ? "From " : ""}{money(product.priceCents + product.shippingCents)}</b>
+        </div>
+        <label>Recipient
+          <select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} required>
+            {data.employees.filter((employee) => employee.status === "active").map((employee) => <option key={employee.id} value={employee.id}>{fullName(employee)} — {employee.email}</option>)}
+          </select>
+        </label>
+        <label>Gift message
+          <textarea rows={4} maxLength={500} value={message} onChange={(event) => setMessage(event.target.value)} required />
+        </label>
+        <div className="order-total">
+          <span>Gift <b>{money(product.priceCents)}</b></span>
+          <span>Estimated shipping <b>{money(product.shippingCents)}</b></span>
+          <hr />
+          <span>Estimated total <b>{money(product.priceCents + product.shippingCents)}</b></span>
+        </div>
+        <p className="privacy-note"><ShieldCheck /> Final tax or variable pricing is calculated by Goody. Confirming sends an email gift notification.</p>
+        {error && <div className="app-error"><span>{error}</span></div>}
+        <footer>
+          <button type="button" className="button button-secondary" onClick={close}>Cancel</button>
+          <button className="button button-primary" disabled={busy || !employeeId}>{busy ? "Sending…" : "Confirm and send"}</button>
+        </footer>
+      </form>
+    </ModalShell>
   );
 }
 
