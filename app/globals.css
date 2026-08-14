@@ -227,3 +227,6 @@ footer { padding: 65px 0 20px; color: #c2cbc8; background: #1b2623; }.footer-top
   .dashboard-preview .brand-logo { width: 120px; height: 36px; }
   .detail-page-nav .brand-logo { width: 126px; height: 38px; }
 }
+.app-content .reward-history-page .detail-page-nav {
+  display: none;
+}

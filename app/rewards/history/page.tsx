@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { RewardHistoryPage } from "@/components/app/SecondaryPages";
+import { AppShell } from "@/components/app/AppShell";
 
 export const metadata: Metadata = { title: "Reward History" };
-export default function Page() { return <RewardHistoryPage />; }
+export default function Page() { return <AppShell view="reward-history" />; }

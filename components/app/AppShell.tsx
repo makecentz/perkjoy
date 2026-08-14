@@ -44,6 +44,7 @@ import {
 } from "@/components/app/PhaseHControls";
 import { authenticatedFetch } from "@/lib/supabase/fetch";
 import { EmployeesExperience } from "@/components/employees/EmployeesExperience";
+import { RewardHistoryPage } from "@/components/app/SecondaryPages";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 type View =
@@ -51,6 +52,7 @@ type View =
   | "employees"
   | "celebrations"
   | "rewards"
+  | "reward-history"
   | "perkjoy-local"
   | "rules"
   | "reports"
@@ -271,7 +273,7 @@ export function AppShell({ view = "dashboard" }: { view?: View }) {
               {item.view === "celebrations" && <em>8</em>}
             </Link>
           ))}
-          <Link href="/rewards/history" onClick={() => setMobileOpen(false)}>
+          <Link className={view === "reward-history" ? "active" : ""} href="/rewards/history" onClick={() => setMobileOpen(false)}>
             <History />
             Reward History
           </Link>
@@ -546,6 +548,7 @@ function ViewContent({
     return <CelebrationsView data={data} mutate={mutate} />;
   if (view === "rewards")
     return <RewardsView data={data} openRecognize={openRecognize} />;
+  if (view === "reward-history") return <RewardHistoryPage />;
   if (view === "perkjoy-local")
     return (
       <PhaseDLocalView
