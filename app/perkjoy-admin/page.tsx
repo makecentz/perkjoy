@@ -6,6 +6,7 @@ import { getAdminAnalytics } from "@/lib/admin-analytics";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { AdminIntegrationSettings } from "@/components/admin/AdminIntegrationSettings";
+import { StripeConnectPanel } from "@/components/admin/StripeConnectPanel";
 
 export const metadata: Metadata = { title: "PerkJoy Operations" };
 export const dynamic = "force-dynamic";
@@ -21,8 +22,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
   const authorized = Boolean(user && profile?.data?.is_super_admin);
   if (!authorized) return <AdminGate identified={Boolean(user)} />;
 
-  const section = (await searchParams).section === "settings" ? "settings" : "overview";
+  const requestedSection = (await searchParams).section;
+  const section = requestedSection === "settings" || requestedSection === "payouts" ? requestedSection : "overview";
   if (section === "settings") return <AdminShell section="settings"><AdminIntegrationSettings /></AdminShell>;
+  if (section === "payouts") return <AdminShell section="payouts"><StripeConnectPanel /></AdminShell>;
 
   const analytics = await getAdminAnalytics();
   const { metrics, queue, vendorPerformance } = analytics;

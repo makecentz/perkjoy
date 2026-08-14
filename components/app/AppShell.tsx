@@ -1828,97 +1828,6 @@ function LocalView({
   );
 }
 
-type ConnectVendor = {
-  id: string;
-  name: string;
-  email: string | null;
-  active: boolean;
-  demo: boolean;
-  connected: boolean;
-  detailsSubmitted: boolean;
-  chargesEnabled: boolean;
-  payoutsEnabled: boolean;
-};
-
-function StripeConnectPanel() {
-  const [vendors, setVendors] = useState<ConnectVendor[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [connecting, setConnecting] = useState("");
-
-  async function loadVendors() {
-    setLoading(true);
-    setError("");
-    try {
-      const response = await authenticatedFetch("/api/stripe/connect/vendors", { cache: "no-store" });
-      const result = await response.json() as { vendors?: ConnectVendor[]; error?: string };
-      if (!response.ok) throw new Error(result.error || "Unable to load vendor payout status.");
-      setVendors(result.vendors ?? []);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to load vendor payout status.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    const controller = new AbortController();
-    authenticatedFetch("/api/stripe/connect/vendors", { cache: "no-store", signal: controller.signal })
-      .then(async (response) => {
-        const result = await response.json() as { vendors?: ConnectVendor[]; error?: string };
-        if (!response.ok) throw new Error(result.error || "Unable to load vendor payout status.");
-        setVendors(result.vendors ?? []);
-      })
-      .catch((reason) => {
-        if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Unable to load vendor payout status.");
-      })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
-  }, []);
-
-  async function connect(vendorId: string) {
-    setConnecting(vendorId);
-    setError("");
-    try {
-      const response = await authenticatedFetch("/api/stripe/connect/accounts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vendorId }),
-      });
-      const result = await response.json() as { url?: string; error?: string };
-      if (!response.ok || !result.url) throw new Error(result.error || "Unable to start Stripe onboarding.");
-      window.location.assign(result.url);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to start Stripe onboarding.");
-      setConnecting("");
-    }
-  }
-
-  return (
-    <section className="stripe-connect-panel app-card">
-      <div className="card-head">
-        <div><small>SUPER ADMIN · STRIPE CONNECT</small><h2>Local vendor payouts</h2><p>Onboard vendors and confirm they can accept payments and receive automatic payouts.</p></div>
-        <button type="button" className="button button-secondary" onClick={() => void loadVendors()} disabled={loading}>Refresh</button>
-      </div>
-      {error && <div className="app-error"><span>{error}</span></div>}
-      {loading ? <p className="stripe-connect-loading">Loading payout accounts…</p> : (
-        <div className="stripe-connect-vendors">
-          {vendors.map((vendor) => {
-            const ready = vendor.chargesEnabled && vendor.payoutsEnabled;
-            return <article key={vendor.id}>
-              <span className={ready ? "ready" : vendor.connected ? "pending" : "not-connected"}><i />{ready ? "Ready" : vendor.connected ? "Needs information" : "Not connected"}</span>
-              <div><b>{vendor.name}</b><small>{vendor.email || "Stripe will collect the vendor's email during onboarding"}</small></div>
-              <button type="button" className="button button-primary" onClick={() => void connect(vendor.id)} disabled={connecting === vendor.id}>
-                {connecting === vendor.id ? "Opening Stripe…" : ready ? "Manage account" : vendor.connected ? "Continue onboarding" : "Connect Stripe"}
-              </button>
-            </article>;
-          })}
-        </div>
-      )}
-    </section>
-  );
-}
-
 void LocalView;
 
 function PhaseDLocalView({
@@ -1998,7 +1907,6 @@ function PhaseDLocalView({
   );
   return (
     <>
-      {data.access.roles.includes("SUPER_ADMIN") && <StripeConnectPanel />}
       <div className="local-app-hero local-core-hero">
         <div>
           <span>
