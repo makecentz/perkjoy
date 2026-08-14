@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { headers } from "next/headers";
 import { AlertTriangle, ArrowLeft, BarChart3, Building2, CheckCircle2, Gift, LockKeyhole, ShieldCheck, Sparkles, Store, Users, WandSparkles } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { getAdminAnalytics } from "@/lib/admin-analytics";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "PerkJoy Operations" };
 export const dynamic = "force-dynamic";
@@ -11,12 +11,13 @@ export const dynamic = "force-dynamic";
 function money(cents: number) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(cents / 100); }
 
 export default async function Page() {
-  const requestHeaders = await headers();
-  const userId = requestHeaders.get("oai-authenticated-user-id");
-  const localVerification = requestHeaders.get("host")?.startsWith("localhost") && userId === "phase-f-admin";
-  const allowedIds = (process.env.PERKJOY_SUPER_ADMIN_IDS ?? "").split(",").map((item) => item.trim()).filter(Boolean);
-  const authorized = Boolean(localVerification || (userId && (allowedIds.includes(userId) || allowedIds.includes("*"))));
-  if (!authorized) return <AdminGate identified={Boolean(userId)} />;
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const profile = user
+    ? await supabase.from("profiles").select("is_super_admin").eq("id", user.id).single()
+    : null;
+  const authorized = Boolean(user && profile?.data?.is_super_admin);
+  if (!authorized) return <AdminGate identified={Boolean(user)} />;
 
   const analytics = await getAdminAnalytics();
   const { metrics, queue, vendorPerformance } = analytics;

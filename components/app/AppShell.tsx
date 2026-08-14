@@ -291,6 +291,12 @@ export function AppShell({ view = "dashboard" }: { view?: View }) {
               {item.label}
             </Link>
           ))}
+          {data?.access.roles.includes("SUPER_ADMIN") && (
+            <Link href="/perkjoy-admin" onClick={() => setMobileOpen(false)}>
+              <ShieldCheck />
+              PerkJoy Admin
+            </Link>
+          )}
         </nav>
         <div className="sidebar-card">
           <span>
