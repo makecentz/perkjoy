@@ -949,10 +949,14 @@ export type Database = {
           gift_message: string | null
           id: string
           internal_notes: string | null
+          paid_at: string | null
           options: Json
           organization_id: string
           product_id: string
           status: string
+          stripe_checkout_session_id: string | null
+          stripe_payment_intent_id: string | null
+          stripe_transfer_id: string | null
           updated_at: string
           vendor_cost: number
         }
@@ -966,10 +970,14 @@ export type Database = {
           gift_message?: string | null
           id?: string
           internal_notes?: string | null
+          paid_at?: string | null
           options?: Json
           organization_id: string
           product_id: string
           status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_transfer_id?: string | null
           updated_at?: string
           vendor_cost: number
         }
@@ -983,10 +991,14 @@ export type Database = {
           gift_message?: string | null
           id?: string
           internal_notes?: string | null
+          paid_at?: string | null
           options?: Json
           organization_id?: string
           product_id?: string
           status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_transfer_id?: string | null
           updated_at?: string
           vendor_cost?: number
         }
@@ -1375,6 +1387,36 @@ export type Database = {
           stripe_customer_id?: string | null
           timezone?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      payment_provider_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          payload: Json
+          processed_at: string | null
+          provider: string
+          provider_event_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          payload: Json
+          processed_at?: string | null
+          provider: string
+          provider_event_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          payload?: Json
+          processed_at?: string | null
+          provider?: string
+          provider_event_id?: string
         }
         Relationships: []
       }
@@ -1881,6 +1923,38 @@ export type Database = {
           },
         ]
       }
+      vendor_members: {
+        Row: {
+          created_at: string
+          id: string
+          role: string
+          user_id: string
+          vendor_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: string
+          user_id: string
+          vendor_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: string
+          user_id?: string
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_members_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vendor_products: {
         Row: {
           active: boolean
@@ -1991,6 +2065,11 @@ export type Database = {
           service_area: Json
           slug: string
           state: string
+          stripe_account_id: string | null
+          stripe_charges_enabled: boolean
+          stripe_connected_at: string | null
+          stripe_details_submitted: boolean
+          stripe_payouts_enabled: boolean
           updated_at: string
           website_url: string | null
         }
@@ -2014,6 +2093,11 @@ export type Database = {
           service_area?: Json
           slug: string
           state: string
+          stripe_account_id?: string | null
+          stripe_charges_enabled?: boolean
+          stripe_connected_at?: string | null
+          stripe_details_submitted?: boolean
+          stripe_payouts_enabled?: boolean
           updated_at?: string
           website_url?: string | null
         }
@@ -2037,6 +2121,11 @@ export type Database = {
           service_area?: Json
           slug?: string
           state?: string
+          stripe_account_id?: string | null
+          stripe_charges_enabled?: boolean
+          stripe_connected_at?: string | null
+          stripe_details_submitted?: boolean
+          stripe_payouts_enabled?: boolean
           updated_at?: string
           website_url?: string | null
         }

@@ -475,9 +475,7 @@ export function AppShell({ view = "dashboard" }: { view?: View }) {
           product={selectedProduct}
           selected={selectedEmployee}
           setSelected={setSelectedEmployee}
-          busy={busy}
           close={() => setModal(null)}
-          submit={mutate}
         />
       )}
       {modal === "team" && data && (
@@ -1824,6 +1822,97 @@ function LocalView({
   );
 }
 
+type ConnectVendor = {
+  id: string;
+  name: string;
+  email: string | null;
+  active: boolean;
+  demo: boolean;
+  connected: boolean;
+  detailsSubmitted: boolean;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+};
+
+function StripeConnectPanel() {
+  const [vendors, setVendors] = useState<ConnectVendor[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [connecting, setConnecting] = useState("");
+
+  async function loadVendors() {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await authenticatedFetch("/api/stripe/connect/vendors", { cache: "no-store" });
+      const result = await response.json() as { vendors?: ConnectVendor[]; error?: string };
+      if (!response.ok) throw new Error(result.error || "Unable to load vendor payout status.");
+      setVendors(result.vendors ?? []);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to load vendor payout status.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    const controller = new AbortController();
+    authenticatedFetch("/api/stripe/connect/vendors", { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        const result = await response.json() as { vendors?: ConnectVendor[]; error?: string };
+        if (!response.ok) throw new Error(result.error || "Unable to load vendor payout status.");
+        setVendors(result.vendors ?? []);
+      })
+      .catch((reason) => {
+        if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Unable to load vendor payout status.");
+      })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, []);
+
+  async function connect(vendorId: string) {
+    setConnecting(vendorId);
+    setError("");
+    try {
+      const response = await authenticatedFetch("/api/stripe/connect/accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vendorId }),
+      });
+      const result = await response.json() as { url?: string; error?: string };
+      if (!response.ok || !result.url) throw new Error(result.error || "Unable to start Stripe onboarding.");
+      window.location.assign(result.url);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to start Stripe onboarding.");
+      setConnecting("");
+    }
+  }
+
+  return (
+    <section className="stripe-connect-panel app-card">
+      <div className="card-head">
+        <div><small>SUPER ADMIN · STRIPE CONNECT</small><h2>Local vendor payouts</h2><p>Onboard vendors and confirm they can accept payments and receive automatic payouts.</p></div>
+        <button type="button" className="button button-secondary" onClick={() => void loadVendors()} disabled={loading}>Refresh</button>
+      </div>
+      {error && <div className="app-error"><span>{error}</span></div>}
+      {loading ? <p className="stripe-connect-loading">Loading payout accounts…</p> : (
+        <div className="stripe-connect-vendors">
+          {vendors.map((vendor) => {
+            const ready = vendor.chargesEnabled && vendor.payoutsEnabled;
+            return <article key={vendor.id}>
+              <span className={ready ? "ready" : vendor.connected ? "pending" : "not-connected"}><i />{ready ? "Ready" : vendor.connected ? "Needs information" : "Not connected"}</span>
+              <div><b>{vendor.name}</b><small>{vendor.email || "Add a vendor email before onboarding"}</small></div>
+              <button type="button" className="button button-primary" onClick={() => void connect(vendor.id)} disabled={connecting === vendor.id || !vendor.email}>
+                {connecting === vendor.id ? "Opening Stripe…" : ready ? "Manage account" : vendor.connected ? "Continue onboarding" : "Connect Stripe"}
+              </button>
+            </article>;
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 void LocalView;
 
 function PhaseDLocalView({
@@ -1903,6 +1992,7 @@ function PhaseDLocalView({
   );
   return (
     <>
+      {data.access.roles.includes("SUPER_ADMIN") && <StripeConnectPanel />}
       <div className="local-app-hero local-core-hero">
         <div>
           <span>
@@ -4209,28 +4299,35 @@ function OrderModal({
   product,
   selected,
   setSelected,
-  busy,
   close,
-  submit,
 }: {
   employees: Employee[];
   product: Product;
   selected: string;
   setSelected: (id: string) => void;
-  busy: boolean;
   close: () => void;
-  submit: (payload: Record<string, unknown>) => void;
 }) {
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
   const tomorrow = format(new Date(Date.now() + 86400000 * 3), "yyyy-MM-dd");
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setCheckoutBusy(true);
+    setCheckoutError("");
     const form = new FormData(event.currentTarget);
-    submit({
-      action: "createOrder",
-      employeeId: selected,
-      productId: product.id,
-      deliveryDate: form.get("deliveryDate"),
-    });
+    try {
+      const response = await authenticatedFetch("/api/stripe/local/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId: selected, productId: product.id, deliveryDate: form.get("deliveryDate"), giftMessage: form.get("giftMessage") }),
+      });
+      const result = await response.json() as { url?: string | null; error?: string };
+      if (!response.ok || !result.url) throw new Error(result.error || "Unable to open secure checkout.");
+      window.location.assign(result.url);
+    } catch (reason) {
+      setCheckoutError(reason instanceof Error ? reason.message : "Unable to open secure checkout.");
+      setCheckoutBusy(false);
+    }
   }
   return (
     <ModalShell
@@ -4274,6 +4371,7 @@ function OrderModal({
         <label>
           Gift message
           <textarea
+            name="giftMessage"
             rows={3}
             defaultValue="Hope your day is as wonderful as you are. Happy Birthday!"
           />
@@ -4291,9 +4389,9 @@ function OrderModal({
           </span>
         </div>
         <p className="privacy-note">
-          <ShieldCheck /> Availability and minimum notice are checked before the
-          order enters the fulfillment queue.
+          <ShieldCheck /> Secure payment is handled by Stripe. The local vendor receives their payout automatically after payment.
         </p>
+        {checkoutError && <div className="app-error"><span>{checkoutError}</span></div>}
         <footer>
           <button
             type="button"
@@ -4302,10 +4400,10 @@ function OrderModal({
           >
             Cancel
           </button>
-          <button className="button button-primary" disabled={busy}>
-            {busy
+          <button className="button button-primary" disabled={checkoutBusy}>
+            {checkoutBusy
               ? "Placing order…"
-              : `Confirm ${money(product.priceCents + product.deliveryFeeCents)}`}
+              : `Pay ${money(product.priceCents + product.deliveryFeeCents)}`}
           </button>
         </footer>
       </form>
