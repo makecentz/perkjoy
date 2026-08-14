@@ -1,3 +1,5 @@
+import type { AccessContext, OrganizationRole } from "@/lib/access-control";
+
 export type Employee = {
   id: string;
   firstName: string;
@@ -260,7 +262,8 @@ export type TeamCelebration = {
 
 export type Workspace = {
   organization: { id: string; name: string; timezone: string; monthlyBudgetCents: number };
-  currentUserRole?: "OWNER" | "ADMIN" | "MANAGER" | "VIEWER";
+  access: AccessContext;
+  currentUserRole?: OrganizationRole;
   organizationSettings: {
     reminderDays: number[];
     notificationPreferences: { eventReminders: boolean; budgetAlerts: boolean; rewardFailures: boolean; deliveryUpdates: boolean };

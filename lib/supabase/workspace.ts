@@ -1,4 +1,5 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { resolveAccessContext, type AccessContext } from "@/lib/access-control";
 import { automationEventKey, isAutomationDue, ruleMatchesEvent, timingOffsetDays } from "@/lib/automation-engine";
 import { getAutomationTemplate } from "@/lib/automation-templates";
 import { hashProfileToken, profileToken } from "@/lib/celebration-profile";
@@ -81,12 +82,19 @@ async function organizationMembershipFor(client: Client, user: User) {
   return membership;
 }
 
-async function loadWorkspace(client: Client, organizationId: string, currentUserRole: Workspace["currentUserRole"] = "VIEWER"): Promise<Workspace> {
+const EMPLOYEE_DIRECTORY_COLUMNS = "id,organization_id,first_name,last_name,email,birthday_month,birthday_day,hire_date,department_id,job_title,manager_employee_id,work_location,recognition_preferences,status,work_mode,preferred_celebration_delivery,organization_location_id,created_at,updated_at";
+
+async function loadWorkspace(
+  client: Client,
+  organizationId: string,
+  access: AccessContext,
+  currentUserRole: Workspace["currentUserRole"] = "VIEWER",
+): Promise<Workspace> {
   const results = await Promise.all([
     client.from("organizations").select("*").eq("id", organizationId).single(),
     client.from("organization_settings").select("*").eq("organization_id", organizationId).single(),
     client.from("departments").select("*").eq("organization_id", organizationId),
-    client.from("employees").select("id,organization_id,first_name,last_name,email,phone,avatar_path,birthday_month,birthday_day,hire_date,department_id,job_title,manager_employee_id,employee_number,work_location,address_line_1,address_line_2,city,state,postal_code,delivery_same_as_work,delivery_address_line_1,delivery_address_line_2,delivery_city,delivery_state,delivery_postal_code,recognition_preferences,status,work_mode,preferred_celebration_delivery,organization_location_id,created_at,updated_at").eq("organization_id", organizationId).order("first_name"),
+    client.from("employees").select(EMPLOYEE_DIRECTORY_COLUMNS).eq("organization_id", organizationId).order("first_name"),
     client.from("automation_rules").select("*").eq("organization_id", organizationId).order("created_at"),
     client.from("recognition_events").select("*").eq("organization_id", organizationId),
     client.from("rewards").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }),
@@ -150,25 +158,20 @@ async function loadWorkspace(client: Client, organizationId: string, currentUser
 
   const departmentName = new Map(departments.map((department) => [department.id, department.name]));
   const managerName = new Map(employees.map((employee) => [employee.id, `${employee.first_name} ${employee.last_name}`]));
-  const avatarPaths = employees.flatMap((employee) => employee.avatar_path ? [employee.avatar_path] : []);
-  const signedAvatarResult = avatarPaths.length
-    ? await client.storage.from("employee-avatars").createSignedUrls(avatarPaths, 3600)
-    : { data: [], error: null };
-  const avatarUrl = new Map((signedAvatarResult.data ?? []).map((item) => [item.path, item.signedUrl]));
   const employeeRows: Employee[] = employees.map((employee) => ({
     id: employee.id,
     firstName: employee.first_name,
     lastName: employee.last_name,
     email: employee.email,
-    phone: employee.phone,
-    avatarPath: employee.avatar_path,
-    avatarUrl: employee.avatar_path ? avatarUrl.get(employee.avatar_path) ?? null : null,
+    phone: null,
+    avatarPath: null,
+    avatarUrl: null,
     department: departmentName.get(employee.department_id ?? "") ?? "General",
     departmentId: employee.department_id,
     jobTitle: employee.job_title ?? "Team Member",
     managerEmployeeId: employee.manager_employee_id,
     managerName: employee.manager_employee_id ? managerName.get(employee.manager_employee_id) ?? null : null,
-    employeeNumber: employee.employee_number,
+    employeeNumber: null,
     birthdayMonth: employee.birthday_month,
     birthdayDay: employee.birthday_day,
     hireDate: employee.hire_date,
@@ -177,17 +180,17 @@ async function loadWorkspace(client: Client, organizationId: string, currentUser
     preferredDelivery: employee.preferred_celebration_delivery as Employee["preferredDelivery"],
     locationId: employee.organization_location_id,
     workLocation: employee.work_location,
-    addressLine1: employee.address_line_1,
-    addressLine2: employee.address_line_2,
-    city: employee.city,
-    state: employee.state,
-    postalCode: employee.postal_code,
-    deliverySameAsWork: employee.delivery_same_as_work,
-    deliveryAddressLine1: employee.delivery_address_line_1,
-    deliveryAddressLine2: employee.delivery_address_line_2,
-    deliveryCity: employee.delivery_city,
-    deliveryState: employee.delivery_state,
-    deliveryPostalCode: employee.delivery_postal_code,
+    addressLine1: null,
+    addressLine2: null,
+    city: null,
+    state: null,
+    postalCode: null,
+    deliverySameAsWork: true,
+    deliveryAddressLine1: null,
+    deliveryAddressLine2: null,
+    deliveryCity: null,
+    deliveryState: null,
+    deliveryPostalCode: null,
     createdAt: employee.created_at,
     updatedAt: employee.updated_at,
   }));
@@ -225,6 +228,7 @@ async function loadWorkspace(client: Client, organizationId: string, currentUser
       timezone: organization.timezone,
       monthlyBudgetCents: cents(settings.monthly_budget),
     },
+    access,
     currentUserRole,
     organizationSettings: {
       reminderDays: settings.reminder_days,
@@ -476,6 +480,45 @@ function employeeValues(input: EmployeeInput, organizationId: string, targetDepa
   };
 }
 
+function employeeDirectoryValues(input: EmployeeInput, targetDepartmentId: string | null) {
+  return {
+    first_name: input.firstName,
+    last_name: input.lastName,
+    email: input.email,
+    birthday_month: input.birthdayMonth,
+    birthday_day: input.birthdayDay,
+    hire_date: input.hireDate,
+    department_id: targetDepartmentId,
+    job_title: input.jobTitle,
+    manager_employee_id: input.managerEmployeeId,
+    status: input.status,
+    work_mode: input.workMode,
+    preferred_celebration_delivery: input.preferredDelivery,
+    organization_location_id: input.organizationLocationId,
+    work_location: input.workLocation,
+  };
+}
+
+async function removeEmployeeAvatarFiles(
+  client: Client,
+  organizationId: string,
+  employeeId: string,
+  keepPath?: string | null,
+) {
+  const folder = `${organizationId}/${employeeId}`;
+  const listed = await client.storage.from("employee-avatars").list(folder, { limit: 100 });
+  if (listed.error) {
+    console.warn("employee_avatar_list_failed", listed.error.message);
+    return;
+  }
+  const stalePaths = (listed.data ?? [])
+    .filter((item) => `${folder}/${item.name}` !== keepPath)
+    .map((item) => `${folder}/${item.name}`);
+  if (!stalePaths.length) return;
+  const removed = await client.storage.from("employee-avatars").remove(stalePaths);
+  if (removed.error) console.warn("employee_avatar_cleanup_failed", removed.error.message);
+}
+
 function employeeModel(id: string, input: EmployeeInput): Employee {
   return {
     id,
@@ -623,7 +666,16 @@ async function applyTemplate(client: Client, user: User, organizationId: string,
 
 export async function getSupabaseWorkspace(client: Client, user: User) {
   const membership = await organizationMembershipFor(client, user);
-  return loadWorkspace(client, membership.organization_id, membership.role);
+  const profile = requireResult(await client
+    .from("profiles")
+    .select("is_super_admin")
+    .eq("id", user.id)
+    .single(), "Loading account access");
+  const access = resolveAccessContext({
+    isSuperAdmin: profile.is_super_admin,
+    organizationRole: membership.role,
+  });
+  return loadWorkspace(client, membership.organization_id, access, membership.role);
 }
 
 export async function mutateSupabaseWorkspace(client: Client, user: User, payload: Record<string, unknown>) {
@@ -650,11 +702,12 @@ export async function mutateSupabaseWorkspace(client: Client, user: User, payloa
   } else if (action === "updateEmployee") {
     const input = employeeInputSchema.parse(payload);
     if (!input.employeeId) throw new Error("Choose an employee to update.");
-    const existing = requireResult(await client.from("employees").select("*").eq("id", input.employeeId).eq("organization_id", organizationId).single(), "Finding the employee");
+    const existing = requireResult(await client.from("employees").select(EMPLOYEE_DIRECTORY_COLUMNS).eq("id", input.employeeId).eq("organization_id", organizationId).single(), "Finding the employee");
     const targetDepartmentId = await departmentId(client, organizationId, input.department ?? "General");
-    requireResult(await client.from("employees").update(employeeValues(input, organizationId, targetDepartmentId)).eq("id", input.employeeId).eq("organization_id", organizationId), "Updating the employee");
+    const values = employeeDirectoryValues(input, targetDepartmentId);
+    requireResult(await client.from("employees").update(values).eq("id", input.employeeId).eq("organization_id", organizationId), "Updating the employee");
     await syncEmployeeEvents(client, organizationId, employeeModel(input.employeeId, input));
-    const changedFields = Object.entries(employeeValues(input, organizationId, targetDepartmentId)).filter(([key, value]) => String(existing[key as keyof typeof existing] ?? "") !== String(value ?? "")).map(([key]) => key);
+    const changedFields = Object.entries(values).filter(([key, value]) => String(existing[key as keyof typeof existing] ?? "") !== String(value ?? "")).map(([key]) => key);
     await audit(client, user.id, organizationId, "employee.updated", "employee", input.employeeId, { changedFields });
   } else if (action === "setEmployeeStatus") {
     const employeeId = String(payload.employeeId ?? "");
@@ -664,25 +717,19 @@ export async function mutateSupabaseWorkspace(client: Client, user: User, payloa
   } else if (action === "updateEmployeeAvatar") {
     const employeeId = String(payload.employeeId ?? "");
     const avatarPath = payload.avatarPath ? String(payload.avatarPath) : null;
-    const employee = requireResult(await client.from("employees").select("avatar_path").eq("id", employeeId).eq("organization_id", organizationId).single(), "Finding the employee");
     if (avatarPath && !avatarPath.startsWith(`${organizationId}/${employeeId}/`)) throw new Error("The avatar path does not match this employee.");
     requireResult(await client.from("employees").update({ avatar_path: avatarPath }).eq("id", employeeId).eq("organization_id", organizationId), "Updating the employee photo");
-    if (employee.avatar_path && employee.avatar_path !== avatarPath) {
-      const removal = await client.storage.from("employee-avatars").remove([employee.avatar_path]);
-      if (removal.error) console.warn("employee_avatar_cleanup_failed", removal.error.message);
-    }
+    await removeEmployeeAvatarFiles(client, organizationId, employeeId, avatarPath);
     await audit(client, user.id, organizationId, avatarPath ? "employee.photo_updated" : "employee.photo_removed", "employee", employeeId);
   } else if (action === "deleteEmployee") {
     const employeeId = String(payload.employeeId ?? "");
-    const [rewardRows, giftRows, recognitionRows, employeeRow] = await Promise.all([
+    const [rewardRows, giftRows, recognitionRows] = await Promise.all([
       client.from("rewards").select("id", { count: "exact", head: true }).eq("employee_id", employeeId).eq("organization_id", organizationId),
       client.from("gift_history").select("id", { count: "exact", head: true }).eq("employee_id", employeeId).eq("organization_id", organizationId),
       client.from("recognition_events").select("id", { count: "exact", head: true }).eq("employee_id", employeeId).eq("organization_id", organizationId),
-      client.from("employees").select("avatar_path").eq("id", employeeId).eq("organization_id", organizationId).single(),
     ]);
     if ((rewardRows.count ?? 0) + (giftRows.count ?? 0) + (recognitionRows.count ?? 0) > 0) throw new Error("This employee has recognition history. Deactivate them to preserve reporting.");
-    const employee = requireResult(employeeRow, "Finding the employee");
-    if (employee.avatar_path) await client.storage.from("employee-avatars").remove([employee.avatar_path]);
+    await removeEmployeeAvatarFiles(client, organizationId, employeeId);
     requireResult(await client.from("employees").delete().eq("id", employeeId).eq("organization_id", organizationId), "Permanently deleting the employee");
     await audit(client, user.id, organizationId, "employee.deleted", "employee", employeeId);
   } else if (action === "importEmployees") {
@@ -955,5 +1002,14 @@ export async function mutateSupabaseWorkspace(client: Client, user: User, payloa
     throw new Error("Unknown workspace action.");
   }
 
-  return { ...await loadWorkspace(client, organizationId, membership.role), profileInviteUrl, automationResult, createdEmployeeId, importResult };
+  const profile = requireResult(await client
+    .from("profiles")
+    .select("is_super_admin")
+    .eq("id", user.id)
+    .single(), "Loading account access");
+  const access = resolveAccessContext({
+    isSuperAdmin: profile.is_super_admin,
+    organizationRole: membership.role,
+  });
+  return { ...await loadWorkspace(client, organizationId, access, membership.role), profileInviteUrl, automationResult, createdEmployeeId, importResult };
 }
