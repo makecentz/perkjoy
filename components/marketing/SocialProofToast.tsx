@@ -48,7 +48,7 @@ export function SocialProofToast() {
 
   return <aside className={`social-proof-toast ${visible ? "visible" : ""}`} aria-hidden={!visible}>
     <span className="social-proof-art" aria-hidden="true"><Image src="/perkjoy-logo-transparent.png" alt="" width={174} height={58} /></span>
-    <div role="status" aria-live="polite"><small>{entry.verified ? "PERKJOY ACTIVITY" : "EXAMPLE ACTIVITY"}</small><p>{message}</p><em><Check /> {entry.verified ? "Just now" : "Illustrative preview"}</em></div>
+    <div role="status" aria-live="polite"><small>NOW HAPPENING</small><p>{message}</p><em><Check /> {entry.verified ? "Just now" : "Illustrative preview"}</em></div>
     <button type="button" aria-label="Hide activity notifications" onClick={() => { setDismissed(true); setVisible(false); }}><X /></button>
   </aside>;
 }
