@@ -1746,6 +1746,42 @@ export type Database = {
           },
         ]
       }
+      social_proof_settings: {
+        Row: {
+          created_at: string
+          display_duration_seconds: number
+          enabled: boolean
+          entries: Json
+          id: boolean
+          initial_delay_seconds: number
+          interval_seconds: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          display_duration_seconds?: number
+          enabled?: boolean
+          entries?: Json
+          id?: boolean
+          initial_delay_seconds?: number
+          interval_seconds?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          display_duration_seconds?: number
+          enabled?: boolean
+          entries?: Json
+          id?: boolean
+          initial_delay_seconds?: number
+          interval_seconds?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       subscriptions: {
         Row: {
           created_at: string

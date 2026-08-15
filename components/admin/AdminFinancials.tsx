@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { BadgeDollarSign, Building2, CircleDollarSign, HandCoins, ReceiptText, RefreshCcw, Save, Undo2 } from "lucide-react";
+import { authenticatedFetch } from "@/lib/supabase/fetch";
 
 type Metrics = {
   grossTransactionVolumeCents: number;
@@ -29,7 +30,7 @@ export function AdminFinancials({ initialRateBps, updatedAt, metrics }: { initia
 
   async function save() {
     setStatus("saving"); setMessage("");
-    const response = await fetch("/api/admin/financials", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ rateBps }) });
+    const response = await authenticatedFetch("/api/admin/financials", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ rateBps }) });
     const data = await response.json().catch(() => ({})) as { error?: string; rateBps?: number };
     if (!response.ok) { setStatus("error"); setMessage(data.error || "The transaction rate could not be saved."); return; }
     const savedRate = data.rateBps ?? rateBps;

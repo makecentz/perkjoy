@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, ExternalLink, KeyRound, RefreshCw, TriangleAlert } from "lucide-react";
 import { authenticatedFetch } from "@/lib/supabase/fetch";
+import { AdminSocialProofSettings } from "@/components/admin/AdminSocialProofSettings";
 
 type Status = { id: string; name: string; description: string; health: "ok" | "down" | "configured" | "missing"; detail: string; identifier?: string };
 type StatusResponse = { statuses?: Status[]; manageUrl?: string; checkedAt?: string; error?: string };
@@ -49,5 +50,6 @@ export function AdminIntegrationSettings() {
       </article>)}
     </div>
     {checkedAt && <footer>Last checked {new Date(checkedAt).toLocaleString()}</footer>}
+    <AdminSocialProofSettings />
   </section>;
 }
