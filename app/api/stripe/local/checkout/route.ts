@@ -29,11 +29,11 @@ export async function POST(request: Request) {
     });
     if (orderId.error) throw orderId.error;
 
-    const order = await admin.from("local_gift_orders").select("id,organization_id,employee_id,product_id,customer_amount,vendor_cost,delivery_fee,status").eq("id", orderId.data).single();
+    const order = await admin.from("local_gift_orders").select("id,organization_id,employee_id,product_id,customer_amount,vendor_cost,delivery_fee,platform_fee_amount,platform_fee_rate_bps,status").eq("id", orderId.data).single();
     if (order.error) throw order.error;
 
     const totalCents = Math.round((order.data.customer_amount + order.data.delivery_fee) * 100);
-    const platformFeeCents = Math.max(0, Math.round((order.data.customer_amount - order.data.vendor_cost) * 100));
+    const platformFeeCents = Math.max(0, Math.round(order.data.platform_fee_amount * 100));
     const baseUrl = appUrl();
     const session = await getStripe().checkout.sessions.create({
       mode: "payment",
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
       payment_intent_data: {
         application_fee_amount: platformFeeCents,
         transfer_data: { destination: vendor.data.stripe_account_id },
-        metadata: { perkjoy_order_id: order.data.id, perkjoy_vendor_id: vendor.data.id, perkjoy_organization_id: order.data.organization_id },
+        metadata: { perkjoy_order_id: order.data.id, perkjoy_vendor_id: vendor.data.id, perkjoy_organization_id: order.data.organization_id, perkjoy_fee_rate_bps: String(order.data.platform_fee_rate_bps) },
       },
       metadata: { perkjoy_order_id: order.data.id, perkjoy_vendor_id: vendor.data.id, perkjoy_organization_id: order.data.organization_id },
       success_url: `${baseUrl}/perkjoy-local?checkout=success&session_id={CHECKOUT_SESSION_ID}`,

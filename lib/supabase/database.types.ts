@@ -952,6 +952,8 @@ export type Database = {
           paid_at: string | null
           options: Json
           organization_id: string
+          platform_fee_amount: number
+          platform_fee_rate_bps: number
           product_id: string
           status: string
           stripe_checkout_session_id: string | null
@@ -973,6 +975,8 @@ export type Database = {
           paid_at?: string | null
           options?: Json
           organization_id: string
+          platform_fee_amount?: number
+          platform_fee_rate_bps?: number
           product_id: string
           status?: string
           stripe_checkout_session_id?: string | null
@@ -994,6 +998,8 @@ export type Database = {
           paid_at?: string | null
           options?: Json
           organization_id?: string
+          platform_fee_amount?: number
+          platform_fee_rate_bps?: number
           product_id?: string
           status?: string
           stripe_checkout_session_id?: string | null
@@ -1417,6 +1423,30 @@ export type Database = {
           processed_at?: string | null
           provider?: string
           provider_event_id?: string
+        }
+        Relationships: []
+      }
+      platform_financial_settings: {
+        Row: {
+          created_at: string
+          id: boolean
+          local_transaction_fee_bps: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: boolean
+          local_transaction_fee_bps?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: boolean
+          local_transaction_fee_bps?: number
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }

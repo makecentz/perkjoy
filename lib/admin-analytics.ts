@@ -15,7 +15,7 @@ export async function getAdminAnalytics() {
     client.from("employees").select("id,status"),
     client.from("employee_events").select("status"),
     client.from("rewards").select("amount"),
-    client.from("local_gift_orders").select("product_id,customer_amount,vendor_cost,delivery_fee,status,created_at"),
+    client.from("local_gift_orders").select("product_id,customer_amount,vendor_cost,delivery_fee,platform_fee_amount,status,created_at"),
     client.from("vendor_products").select("id,vendor_id,platform_fee"),
     client.from("marketplace_listings").select("product_id,rating"),
     client.from("concierge_requests").select("status,service_fee"),
@@ -39,7 +39,7 @@ export async function getAdminAnalytics() {
   const failedOrderStatuses = new Set(["failed", "issue", "cancelled", "refunded"]);
   const weekAgo = Date.now() - 7 * 86400000;
   const localGmvCents = orders.reduce((sum, order) => sum + order.customer_amount, 0);
-  const marketplaceRevenueCents = orders.reduce((sum, order) => sum + (products.find((product) => product.id === order.product_id)?.platform_fee ?? 0), 0);
+  const marketplaceRevenueCents = orders.reduce((sum, order) => sum + order.platform_fee_amount, 0);
   const grossMarginCents = orders.reduce((sum, order) => sum + Math.max(0, order.customer_amount - order.vendor_cost - order.delivery_fee), 0);
   const vendorPerformance = vendors.map((vendor) => {
     const productIds = products.filter((product) => product.vendor_id === vendor.id).map((product) => product.id);
@@ -51,24 +51,24 @@ export async function getAdminAnalytics() {
       orders: vendorOrders.length,
       rating: ratings.length ? ratings.reduce((sum, value) => sum + value, 0) / ratings.length : null,
       successRate: vendorOrders.length ? Math.round(successful / vendorOrders.length * 100) : 100,
-      gmvCents: vendorOrders.reduce((sum, order) => sum + order.customer_amount, 0),
+      gmvCents: Math.round(vendorOrders.reduce((sum, order) => sum + order.customer_amount, 0) * 100),
     };
   }).filter((vendor) => vendor.orders > 0).sort((a, b) => b.gmvCents - a.gmvCents || (b.rating ?? 0) - (a.rating ?? 0));
 
   return {
     metrics: {
-      mrrCents: activeSubscriptions.reduce((sum, item) => sum + item.monthly_recurring_revenue, 0),
+      mrrCents: Math.round(activeSubscriptions.reduce((sum, item) => sum + item.monthly_recurring_revenue, 0) * 100),
       activeOrganizations: activeSubscriptions.length,
       trialOrganizations: subscriptions.filter((item) => item.subscription_status === "trial").length,
       organizations: organizations.length,
       employeesManaged: employees.filter((item) => item.status === "active").length,
       momentsHandled: events.filter((item) => completedStatuses.has(item.status)).length,
-      digitalRewardVolumeCents: rewards.reduce((sum, item) => sum + item.amount, 0),
-      localGmvCents,
-      marketplaceRevenueCents,
-      averageOrderValueCents: orders.length ? Math.round(localGmvCents / orders.length) : 0,
+      digitalRewardVolumeCents: Math.round(rewards.reduce((sum, item) => sum + item.amount, 0) * 100),
+      localGmvCents: Math.round(localGmvCents * 100),
+      marketplaceRevenueCents: Math.round(marketplaceRevenueCents * 100),
+      averageOrderValueCents: orders.length ? Math.round(localGmvCents / orders.length * 100) : 0,
       grossMarginPercent: localGmvCents ? Math.round(grossMarginCents / localGmvCents * 100) : 0,
-      conciergeRevenueCents: concierge.filter((item) => ["approved", "ordered", "delivered"].includes(item.status)).reduce((sum, item) => sum + item.service_fee, 0),
+      conciergeRevenueCents: Math.round(concierge.filter((item) => ["approved", "ordered", "delivered"].includes(item.status)).reduce((sum, item) => sum + item.service_fee, 0) * 100),
       ordersThisWeek: orders.filter((item) => new Date(item.created_at).getTime() >= weekAgo).length,
       failedOrders: orders.filter((item) => failedOrderStatuses.has(item.status)).length,
     },
