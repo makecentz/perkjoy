@@ -22,7 +22,7 @@ export function MarketingHome() {
       <nav className="marketing-nav shell">
         <Link href="/" aria-label="PerkJoy home"><Logo /></Link>
         <div className="nav-links">
-          <a href="#how">How it works</a><Link href="/perkjoy-local">PerkJoy Local</Link><a href="#pricing">Pricing</a>
+          <a href="#how">How it works</a><Link href="/login">PerkJoy Local</Link><a href="#pricing">Pricing</a>
         </div>
         <div className="nav-actions">
           <Link className="button button-ghost" href="/login">Log in</Link>
@@ -98,9 +98,9 @@ export function MarketingHome() {
       <section className="section shell choices-section">
         <div className="section-heading"><span>CHOOSE HOW YOU CELEBRATE</span><h2>One place. Every kind of appreciation.</h2><p>From instant digital rewards to a cake from around the corner.</p></div>
         <div className="choice-grid">
-          <article className="choice-card choice-orange"><div className="choice-art"><Gift size={42} /><span>$50</span></div><small>PERFECT WHEN DIGITAL MAKES SENSE</small><h3>Digital Rewards</h3><p>Ideal for remote employees, instant recognition, last-minute moments, and employee preference.</p><Link href="/rewards">Explore rewards <ArrowRight size={16} /></Link></article>
-          <article className="choice-card choice-cream"><div className="choice-art cake-art"><CakeSlice size={48} /><i>PHL</i></div><small>PHILADELPHIA FAVORITES</small><h3>PerkJoy Local</h3><p>Cakes, cupcakes, and thoughtful gifts from local makers.</p><Link href="/perkjoy-local">Shop local gifts <ArrowRight size={16} /></Link></article>
-          <article className="choice-card choice-yellow"><div className="choice-art trophy-art"><Trophy size={46} /><Star size={18} /></div><small>RIGHT IN THE MOMENT</small><h3>Manager Recognition</h3><p>Send a meaningful reward for a job well done—right away.</p><Link href="/dashboard">See manager tools <ArrowRight size={16} /></Link></article>
+          <article className="choice-card choice-orange"><div className="choice-art"><Gift size={42} /><span>$50</span></div><small>PERFECT WHEN DIGITAL MAKES SENSE</small><h3>Digital Rewards</h3><p>Ideal for remote employees, instant recognition, last-minute moments, and employee preference.</p><Link href="/login">Explore rewards <ArrowRight size={16} /></Link></article>
+          <article className="choice-card choice-cream"><div className="choice-art cake-art"><CakeSlice size={48} /><i>PHL</i></div><small>PHILADELPHIA FAVORITES</small><h3>PerkJoy Local</h3><p>Cakes, cupcakes, and thoughtful gifts from local makers.</p><Link href="/login">Shop local gifts <ArrowRight size={16} /></Link></article>
+          <article className="choice-card choice-yellow"><div className="choice-art trophy-art"><Trophy size={46} /><Star size={18} /></div><small>RIGHT IN THE MOMENT</small><h3>Manager Recognition</h3><p>Send a meaningful reward for a job well done—right away.</p><Link href="/login">See manager tools <ArrowRight size={16} /></Link></article>
         </div>
       </section>
 
@@ -118,11 +118,11 @@ export function MarketingHome() {
       <section className="section shell preview-section">
         <div className="section-heading"><span>YOUR CELEBRATION COMMAND CENTER</span><h2>See every moment before it happens.</h2></div>
         <div className="dashboard-preview">
-          <aside><Logo /><div className="preview-nav"><Link className="active" href="/dashboard">Overview</Link><Link href="/employees">Employees</Link><Link href="/celebrations">Celebrations</Link><Link href="/rewards">Rewards</Link><Link href="/perkjoy-local">PerkJoy Local</Link></div></aside>
+          <aside><Logo /><div className="preview-nav"><Link className="active" href="/login">Overview</Link><Link href="/login">Employees</Link><Link href="/login">Celebrations</Link><Link href="/login">Rewards</Link><Link href="/login">PerkJoy Local</Link></div></aside>
           <div className="preview-main">
-            <div className="preview-title"><div><h3>PerkJoy has this handled.</h3><p>You hire the people. PerkJoy remembers the moments.</p></div><Link href="/dashboard">+ Celebrate Someone</Link></div>
+            <div className="preview-title"><div><h3>PerkJoy has this handled.</h3><p>You hire the people. PerkJoy remembers the moments.</p></div><Link href="/login">+ Celebrate Someone</Link></div>
             <div className="preview-kpis"><span><small>MOMENTS HANDLED</small><b>3</b><em>Every detail confirmed</em></span><span><small>NEEDS ATTENTION</small><b>1</b><em>One quick decision</em></span><span><small>CELEBRATION HEALTH</small><b>75%</b><em>3 of 4 on track</em></span></div>
-            <div className="preview-list"><div className="preview-list-head"><b>What&apos;s Coming Up</b><Link href="/celebrations">Open calendar →</Link></div>
+            <div className="preview-list"><div className="preview-list-head"><b>What&apos;s Coming Up</b><Link href="/login">Open calendar →</Link></div>
               <div><span className="avatar avatar-coral">SJ</span><p><b>Sarah Johnson</b><small>Birthday · Tomorrow</small></p><em className="pill handled-pill">Handled</em></div>
               <div><span className="avatar avatar-gold">MB</span><p><b>Marcus Brown</b><small>5 year anniversary · Aug 14</small></p><em className="pill scheduled-pill">Scheduled</em></div>
               <div><span className="avatar avatar-green">NW</span><p><b>Nicole Williams</b><small>Birthday · In 5 days</small></p><em className="pill attention-pill">Needs Attention</em></div>
@@ -133,7 +133,7 @@ export function MarketingHome() {
 
       <section id="local" className="section local-section">
         <div className="shell local-wrap">
-          <div className="local-copy"><div className="eyebrow"><MapPin size={15} /> Now launching in Philadelphia</div><h2>Send more than another gift card.</h2><p>With PerkJoy Local, companies can celebrate employees with cakes, treats, flowers, lunches, coffee, gift boxes, and experiences from businesses in their city.</p><ul><li><Check /> Cake & cupcakes</li><li><Check /> Flowers & team lunches</li><li><Check /> Delivery coordinated by PerkJoy</li></ul><Link className="button button-dark" href="/perkjoy-local">Explore PerkJoy Local <ArrowRight size={16} /></Link><small className="demo-note">Catalog vendors shown in this demo are illustrative and not represented as partners.</small></div>
+          <div className="local-copy"><div className="eyebrow"><MapPin size={15} /> Now launching in Philadelphia</div><h2>Send more than another gift card.</h2><p>With PerkJoy Local, companies can celebrate employees with cakes, treats, flowers, lunches, coffee, gift boxes, and experiences from businesses in their city.</p><ul><li><Check /> Cake & cupcakes</li><li><Check /> Flowers & team lunches</li><li><Check /> Delivery coordinated by PerkJoy</li></ul><Link className="button button-dark" href="/login">Explore PerkJoy Local <ArrowRight size={16} /></Link><small className="demo-note">Catalog vendors shown in this demo are illustrative and not represented as partners.</small></div>
           <div className="product-stack"><article className="product-hero"><span className="bakery-label">DEMO PHILADELPHIA BAKERY</span><div className="cake-shape"><i /><i /><b>Celebrate!</b></div><div><small>BIRTHDAY CAKES</small><h3>Sunshine Celebration Cake</h3><p>Serves 8–10 · Delivery available</p><b>From $49</b></div></article><article className="mini-product"><span>🍪</span><div><small>TEAM FAVORITE</small><b>Local cookie box</b><p>Delivered across Philadelphia</p></div></article></div>
         </div>
       </section>
@@ -158,7 +158,7 @@ export function MarketingHome() {
 
       <section className="cta-section"><div className="shell"><div><Sparkles /><h2>Your team&apos;s next big moment<br />is already on the calendar.</h2><p>PerkJoy remembers it. Personalizes it. Helps deliver it.</p><Link className="button button-light button-large" href="/signup">Start Celebrating <ArrowRight size={18} /></Link></div></div></section>
 
-      <footer><div className="shell footer-top"><div><Logo inverse /><p>Employee celebrations on autopilot.</p></div><div><b>Product</b><a href="#how">How it works</a><Link href="/dashboard">Dashboard</Link><a href="#pricing">Pricing</a></div><div><b>Company</b><Link href="/contact">Contact</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div><div><b>Sign in</b><Link href="/login">Company login</Link><Link href="/perkjoy-admin">Admin login</Link></div></div><div className="shell footer-bottom"><span>© 2026 PerkJoy. Made with care in Philadelphia.</span><span>Philadelphia, PA <span className="live-dot" /> Systems happy</span></div></footer>
+      <footer><div className="shell footer-top"><div><Logo inverse /><p>Employee celebrations on autopilot.</p></div><div><b>Product</b><a href="#how">How it works</a><Link href="/login">Dashboard</Link><a href="#pricing">Pricing</a></div><div><b>Company</b><Link href="/contact">Contact</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div><div><b>Sign in</b><Link href="/login">Company login</Link><Link href="/login">Admin login</Link></div></div><div className="shell footer-bottom"><span>© 2026 PerkJoy. Made with care in Philadelphia.</span><span>Philadelphia, PA <span className="live-dot" /> Systems happy</span></div></footer>
       <SocialProofToast />
     </main>
   );
