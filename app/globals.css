@@ -314,6 +314,48 @@ html[data-theme="dark"] .modal > header,
 html[data-theme="dark"] .modal form > footer { border-color: #343a37; }
 html[data-theme="dark"] .button-secondary { color: #e4e1dc; background: #252b28; border-color: #414844; }
 
+/* Dashboard cards need explicit surfaces because the light design uses hard-coded whites. */
+html[data-theme="dark"] .app-page .app-card,
+html[data-theme="dark"] .app-page .header-date { color: #eceae5; background: #1d2321; border-color: #373e3a; }
+html[data-theme="dark"] .app-page .card-head h2,
+html[data-theme="dark"] .app-page .header-date b,
+html[data-theme="dark"] .app-page .moment-name b,
+html[data-theme="dark"] .app-page .moment-reward b,
+html[data-theme="dark"] .app-page .attention-card article b,
+html[data-theme="dark"] .app-page .all-handled b,
+html[data-theme="dark"] .app-page .handled-detail article b,
+html[data-theme="dark"] .app-page .activity-card p b,
+html[data-theme="dark"] .app-page .budget-detail b { color: #f3f1ec; }
+html[data-theme="dark"] .app-page .card-head p,
+html[data-theme="dark"] .app-page .moment-when small,
+html[data-theme="dark"] .app-page .moment-name small,
+html[data-theme="dark"] .app-page .moment-reward small,
+html[data-theme="dark"] .app-page .attention-card article p,
+html[data-theme="dark"] .app-page .all-handled p,
+html[data-theme="dark"] .app-page .handled-detail article small,
+html[data-theme="dark"] .app-page .activity-card p,
+html[data-theme="dark"] .app-page .activity-card p small,
+html[data-theme="dark"] .app-page .activity-card em,
+html[data-theme="dark"] .app-page .budget-detail span,
+html[data-theme="dark"] .app-page .budget-ring small { color: #b8bbb4; }
+html[data-theme="dark"] .app-page .moment-list > article,
+html[data-theme="dark"] .app-page .attention-card > article,
+html[data-theme="dark"] .app-page .handled-detail > article,
+html[data-theme="dark"] .app-page .activity-card > div:nth-child(2) > span { border-color: #353c38; }
+html[data-theme="dark"] .app-page .quick-celebrate-card { color: #f4ead2; background: #30291b; border-color: #66552c; }
+html[data-theme="dark"] .app-page .quick-celebrate-card h2 { color: #fff3d5; }
+html[data-theme="dark"] .app-page .quick-celebrate-card p { color: #d0c29f; }
+html[data-theme="dark"] .app-page .quick-celebrate-card small { color: #e1bd62; }
+html[data-theme="dark"] .app-page .recommendation-reason { background: #242923; }
+html[data-theme="dark"] .app-page .budget-ring { background: conic-gradient(var(--coral) var(--progress), #343a37 0); }
+html[data-theme="dark"] .app-page .budget-ring:before { background: #1d2321; }
+html[data-theme="dark"] .app-page .budget-detail i.remaining { background: #555b57; }
+html[data-theme="dark"] .app-page .budget-card > a { border-color: #353c38; }
+html[data-theme="dark"] .app-page .handled-detail > .card-head > span { color: #8fd0b3; }
+html[data-theme="dark"] .app-page .handled-detail article > div:nth-child(2) span { color: #b7c3bc; }
+html[data-theme="dark"] .app-page .mobile-bottom-nav { background: #1b201e; border-color: #343a37; }
+html[data-theme="dark"] .app-page .mobile-bottom-nav :is(a,button) { color: #c6c5bf; }
+
 @media (max-width: 850px) {
   .admin-sidebar-bottom { margin: 0; grid-template-columns: auto auto; align-items: center; }
   .admin-sidebar-bottom .theme-toggle { width: 42px; margin: 0; font-size: 0; }
