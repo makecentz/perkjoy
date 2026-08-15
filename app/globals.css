@@ -255,8 +255,8 @@ footer { padding: 65px 0 20px; color: #c2cbc8; background: #1b2623; }.footer-top
 }
 
 /* Theme controls and authenticated dark appearance */
-.auth-form-card footer { margin-top: 20px; padding: 0; color: #716e68; background: transparent; }
-.auth-form-card footer a { color: #9f4634; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.auth-switch { margin-top: 20px; color: #625f59; font-size: 9px; text-align: center; }
+.auth-switch a { color: #9f4634; font-weight: 800; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .theme-toggle { width: 100%; min-height: 44px; display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 7px 8px; color: #67645e; text-align: left; background: transparent; border: 1px solid transparent; border-radius: 10px; cursor: pointer; }
 .theme-toggle:hover { color: #9f4937; background: #fff0ea; }
 .theme-toggle:focus-visible { outline: 2px solid #d97761; outline-offset: 2px; }

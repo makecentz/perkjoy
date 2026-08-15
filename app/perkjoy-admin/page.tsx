@@ -31,7 +31,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
   const { metrics, queue, vendorPerformance } = analytics;
   const cards = [
     ["MRR", money(metrics.mrrCents), "Subscription revenue", BarChart3],
-    ["Active Organizations", metrics.activeOrganizations, `${metrics.trialOrganizations} trials`, Building2],
+    ["Active Organizations", metrics.activeOrganizations, `${metrics.organizations} total workspaces`, Building2],
     ["Employees Managed", metrics.employeesManaged, `${metrics.organizations} organizations`, Users],
     ["Moments Handled", metrics.momentsHandled, "Scheduled or delivered", CheckCircle2],
     ["Digital Reward Volume", money(metrics.digitalRewardVolumeCents), "Reward value, not revenue", Gift],

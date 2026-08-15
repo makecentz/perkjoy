@@ -3,7 +3,7 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Building2, Check, ShieldCheck, Sparkles, Store } from "lucide-react";
+import { ArrowRight, Building2, Check, Sparkles, Store } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { createBrowserSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/browser";
 
@@ -101,7 +101,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" | "forgot" }) {
             <li><Check /> Secure budgets and approvals</li>
           </ul>
         </div>
-        <small><ShieldCheck /> Private by default · Sandbox rewards only</small>
+        <small>Secure access for PerkJoy customers and partners</small>
       </section>
       <section className="auth-form-wrap">
         <div className="mobile-auth-logo"><Logo /></div>
@@ -145,9 +145,9 @@ export function AuthForm({ mode }: { mode: "login" | "signup" | "forgot" }) {
               {busy ? "Please wait…" : mode === "signup" ? accountType === "vendor" ? "Create vendor account" : "Create workspace" : mode === "forgot" ? "Send reset link" : "Log in"}<ArrowRight />
             </button>
           </form>
-          <footer>
-            {mode === "login" ? <>New to PerkJoy? <Link href="/signup">Start trial</Link></> : mode === "signup" ? <>Already have an account? <Link href="/login">Log in</Link></> : <Link href="/login">← Back to login</Link>}
-          </footer>
+          <div className="auth-switch">
+            {mode === "login" ? <>Are you a new customer? <Link href="/signup">Sign up here</Link></> : mode === "signup" ? <>Already have an account? <Link href="/login">Log in</Link></> : <Link href="/login">← Back to login</Link>}
+          </div>
         </div>
       </section>
     </main>

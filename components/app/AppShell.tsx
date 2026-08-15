@@ -3616,12 +3616,12 @@ function RecognitionModal({
           <span>
             <b>
               {amount
-                ? `${money(amount)} TEST digital reward`
+                ? `${money(amount)} digital reward`
                 : "Recognition message"}
             </b>
             <small>
               {amount
-                ? "Scheduled through Tremendous Sandbox"
+                ? "Scheduled through your connected reward provider"
                 : "No reward purchase"}
             </small>
           </span>

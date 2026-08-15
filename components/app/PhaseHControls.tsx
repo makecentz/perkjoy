@@ -32,13 +32,13 @@ export function AutomationOperations({ data, mutate }: { data: Workspace; mutate
   return <section className="phase-h-automation">
     <div className="automation-run-card">
       <span><Zap /></span>
-      <div><small>SAFE AUTOMATION CHECK</small><h2>See what PerkJoy can handle now.</h2><p>Checks active rules against upcoming moments. Duplicate protection is always on, and live rewards stay off.</p></div>
+      <div><small>AUTOMATION CHECK</small><h2>See what PerkJoy can handle now.</h2><p>Checks active rules against upcoming moments. Duplicate protection is always on, and purchases remain approval-gated.</p></div>
       <button className="button button-primary" onClick={runNow} disabled={running}>{running ? <><Clock3 /> Checking…</> : <><Play /> Run now</>}</button>
     </div>
     {(result || latest) && <div className="automation-result-strip">
       <CheckCircle2 />
       <span><b>{result ? "Automation check complete" : "Latest automation check"}</b><small>{result ? `${result.scheduled} scheduled · ${result.approvals} awaiting approval · ${result.duplicates} duplicates skipped` : `${latest.scheduledCount} scheduled · ${latest.approvalCount} awaiting approval · ${latest.duplicateCount} duplicates skipped`}</small></span>
-      <em>Sandbox safe</em>
+      <em>Approval protected</em>
     </div>}
     <div className="rule-maintenance-card">
       <header><div><small>RULE MAINTENANCE</small><h2>Edit or remove a rule</h2></div><span>{data.rules.length} total</span></header>
