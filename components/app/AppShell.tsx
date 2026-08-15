@@ -47,6 +47,7 @@ import { authenticatedFetch } from "@/lib/supabase/fetch";
 import { EmployeesExperience } from "@/components/employees/EmployeesExperience";
 import { RewardHistoryPage } from "@/components/app/SecondaryPages";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import type { GoodyCatalogProduct } from "@/lib/goody/client";
 
 type View =
@@ -308,6 +309,7 @@ export function AppShell({ view = "dashboard" }: { view?: View }) {
             <i style={{ width: "78%" }} />
           </div>
         </div>
+        <ThemeToggle />
         <div className="sidebar-user">
           <span>
             {data?.organization.name

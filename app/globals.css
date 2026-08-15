@@ -254,6 +254,72 @@ footer { padding: 65px 0 20px; color: #c2cbc8; background: #1b2623; }.footer-top
   display: none;
 }
 
+/* Theme controls and authenticated dark appearance */
+.auth-form-card footer { margin-top: 20px; padding: 0; color: #716e68; background: transparent; }
+.auth-form-card footer a { color: #9f4634; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.theme-toggle { width: 100%; min-height: 44px; display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 7px 8px; color: #67645e; text-align: left; background: transparent; border: 1px solid transparent; border-radius: 10px; cursor: pointer; }
+.theme-toggle:hover { color: #9f4937; background: #fff0ea; }
+.theme-toggle:focus-visible { outline: 2px solid #d97761; outline-offset: 2px; }
+.theme-toggle > span:first-child { width: 30px; height: 30px; display: grid; flex: 0 0 auto; place-items: center; color: #9b4937; background: #fff0ea; border-radius: 9px; }
+.theme-toggle svg { width: 15px; height: 15px; }
+.theme-toggle > span:last-child { display: grid; gap: 2px; }.theme-toggle b { font-size: 9px; }.theme-toggle small { color: #98948d; font-size: 7px; }
+.theme-toggle.compact { width: 42px; padding: 5px; }.theme-toggle.compact > span:first-child { width: 30px; }
+.admin-sidebar-bottom { display: grid; gap: 3px; margin-top: auto; }.admin-sidebar-bottom .admin-back { margin-top: 0; }
+
+html[data-theme="dark"] .app-page,
+html[data-theme="dark"] .admin-shell { color: #e9e7e2; background: #141817; }
+html[data-theme="dark"] .app-sidebar,
+html[data-theme="dark"] .admin-sidebar,
+html[data-theme="dark"] .app-topbar { background: #1b201e; border-color: #303633; }
+html[data-theme="dark"] .app-workspace,
+html[data-theme="dark"] .app-content,
+html[data-theme="dark"] .admin-shell-content,
+html[data-theme="dark"] .admin-console,
+html[data-theme="dark"] .admin-integrations,
+html[data-theme="dark"] .admin-payouts { color: #e9e7e2; background: #141817; }
+html[data-theme="dark"] .app-nav small,
+html[data-theme="dark"] .admin-sidebar nav > small,
+html[data-theme="dark"] .app-page small,
+html[data-theme="dark"] .admin-shell small { color: #a8aaa4; }
+html[data-theme="dark"] .app-nav a,
+html[data-theme="dark"] .admin-sidebar nav a,
+html[data-theme="dark"] .admin-back,
+html[data-theme="dark"] .sidebar-user > button { color: #c4c4bd; }
+html[data-theme="dark"] .app-nav a:hover,
+html[data-theme="dark"] .app-nav a.active,
+html[data-theme="dark"] .admin-sidebar nav a:hover,
+html[data-theme="dark"] .admin-sidebar nav a.active { color: #ffad97; background: #34241f; }
+html[data-theme="dark"] .sidebar-user,
+html[data-theme="dark"] .admin-sidebar .sidebar-head,
+html[data-theme="dark"] .admin-back { border-color: #303633; }
+html[data-theme="dark"] .sidebar-user small { color: #aaa9a2; }
+html[data-theme="dark"] .theme-toggle { color: #d7d5cf; }
+html[data-theme="dark"] .theme-toggle:hover { color: #ffc0ad; background: #34241f; }
+html[data-theme="dark"] .theme-toggle > span:first-child { color: #ffc0ad; background: #3b2923; }
+html[data-theme="dark"] .theme-toggle small { color: #aaa9a2; }
+html[data-theme="dark"] .admin-identity { color: #a9dbc3; background: #20342b; }
+html[data-theme="dark"] .admin-identity small { color: #9eb9ac; }
+html[data-theme="dark"] .app-page :is(.kpi-card,.panel,.dashboard-panel,.mode-banner,.rule-card,.settings-card,.billing-card,.employee-card,.catalog-card,.secondary-card,.history-kpis article,.reward-history-table,.notification-center,.quick-recommendation,.gift-history-mini),
+html[data-theme="dark"] .admin-shell :is(.admin-panel,.admin-business-metrics article,.admin-vendor-table,.admin-integration-list article,.admin-secret-notice,.admin-payout-card) { color: #e9e7e2; background: #1d2220; border-color: #343a37; }
+html[data-theme="dark"] .app-page :is(input,select,textarea),
+html[data-theme="dark"] .admin-shell :is(input,select,textarea) { color: #f0eee9; background: #171b1a; border-color: #3b423f; }
+html[data-theme="dark"] .app-page :is(h1,h2,h3,b,strong),
+html[data-theme="dark"] .admin-shell :is(h1,h2,h3,b,strong) { color: #f4f1ec; }
+html[data-theme="dark"] .app-page :is(p,td,dd),
+html[data-theme="dark"] .admin-shell :is(p,td,dd) { color: #bbbcb6; }
+html[data-theme="dark"] .app-page :is(.table-head,.reward-history-table > header,.rule-flow,.empty-add-card),
+html[data-theme="dark"] .admin-shell :is(.admin-queue article,.admin-vendor-head) { color: #c2c1bb; background: #191e1c; border-color: #343a37; }
+html[data-theme="dark"] .modal { color: #e9e7e2; background: #1d2220; }
+html[data-theme="dark"] .modal > header,
+html[data-theme="dark"] .modal form > footer { border-color: #343a37; }
+html[data-theme="dark"] .button-secondary { color: #e4e1dc; background: #252b28; border-color: #414844; }
+
+@media (max-width: 850px) {
+  .admin-sidebar-bottom { margin: 0; grid-template-columns: auto auto; align-items: center; }
+  .admin-sidebar-bottom .theme-toggle { width: 42px; margin: 0; font-size: 0; }
+  .admin-sidebar-bottom .theme-toggle > span:last-child { display: none; }
+}
+
 /* Business or vendor signup choice */
 .account-type-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 14px; }
 .account-type-choice button { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; padding: 12px; color: #625f59; text-align: left; background: #fff; border: 1px solid #ddd8d0; border-radius: 11px; cursor: pointer; }
