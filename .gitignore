@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/.npm-cache/
+/.supabase/
 
 # next.js
 /.next/

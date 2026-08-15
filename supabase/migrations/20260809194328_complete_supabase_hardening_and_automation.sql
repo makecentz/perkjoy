@@ -86,6 +86,7 @@ begin
     (target_organization_id, 'Project Completion', 'project-completion', 'career', true),
     (target_organization_id, 'Above & Beyond', 'above-and-beyond', 'career', true),
     (target_organization_id, 'Team Achievement', 'team-achievement', 'career', true),
+    (target_organization_id, 'Get well soon', 'get-well-soon', 'life', true),
     (target_organization_id, 'Custom Milestone', 'custom-milestone', 'life', true);
 
   insert into public.approval_policies (

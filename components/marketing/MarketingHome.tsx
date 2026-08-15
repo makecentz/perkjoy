@@ -1,7 +1,7 @@
 import type { AnchorHTMLAttributes } from "react";
 import {
   ArrowRight, Award, CakeSlice, CalendarDays, Check, ChevronDown,
-  Gift, HeartHandshake, MapPin, PartyPopper, Sparkles, Star, Trophy,
+  Gift, HeartHandshake, HeartPulse, MapPin, PartyPopper, Sparkles, Star, Trophy,
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 
@@ -90,6 +90,7 @@ export function MarketingHome() {
           <article><span className="feature-icon coral"><CakeSlice /></span><b>Birthdays</b><p>Make their day with a gift that arrives exactly when it should.</p><small><Check size={14} /> Automatically scheduled</small></article>
           <article><span className="feature-icon gold"><Award /></span><b>Anniversaries</b><p>Celebrate every year of contribution, from one year to ten.</p><small><Check size={14} /> Tenure-aware rules</small></article>
           <article><span className="feature-icon green"><Trophy /></span><b>Everyday wins</b><p>Give managers a simple way to recognize great work in the moment.</p><small><Check size={14} /> Send in under a minute</small></article>
+          <article><span className="feature-icon coral"><HeartPulse /></span><b>Get well soon</b><p>Send a thoughtful gift or reward to an employee recovering away from work.</p><small><Check size={14} /> Home delivery supported</small></article>
         </div>
       </section>
 

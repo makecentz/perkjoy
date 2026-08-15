@@ -1673,6 +1673,7 @@ function LocalView({
           <select aria-label="Occasion">
             <option>Any occasion</option>
             <option>Birthday</option>
+            <option>Get well soon</option>
             <option>Team achievement</option>
             <option>New hire</option>
           </select>
@@ -3580,6 +3581,7 @@ function RecognitionModal({
             <option>Project Complete</option>
             <option>Team Player</option>
             <option>Promotion</option>
+            <option>Get well soon</option>
             <option>Custom</option>
           </select>
         </label>
@@ -3885,6 +3887,7 @@ function ConciergeModal({
               <option>Work Anniversary</option>
               <option>Team Achievement</option>
               <option>New Hire</option>
+              <option>Get well soon</option>
               <option>Custom Celebration</option>
             </select>
           </label>
