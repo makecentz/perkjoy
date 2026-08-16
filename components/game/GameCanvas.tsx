@@ -18,6 +18,7 @@ type Props = {
 
 const sheetUrl = "/game/characters/perkjoy-character-sheet.png";
 const jordanAnimationUrl = "/game/characters/jordan-animation-sheet.png";
+const officeBackgroundUrl = "/game/office-background.png";
 
 function roundedRect(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
   context.beginPath();
@@ -116,7 +117,13 @@ function drawAnimatedJordan(
   context.restore();
 }
 
-function drawOffice(context: CanvasRenderingContext2D) {
+function drawOffice(context: CanvasRenderingContext2D, background: HTMLImageElement | null) {
+  if (background) {
+    context.drawImage(background, 0, 0, GAME_WIDTH, GAME_HEIGHT);
+    context.fillStyle = "rgba(255,250,239,.04)";
+    context.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    return;
+  }
   const gradient = context.createLinearGradient(0, 0, 0, GAME_HEIGHT);
   gradient.addColorStop(0, "#fffaf1");
   gradient.addColorStop(1, "#f2eadc");
@@ -217,7 +224,9 @@ export function GameCanvas({ activeEmployeeIds, automationSeconds, events, feedb
     if (!context) return;
     const image = new Image();
     const jordanAnimation = new Image();
+    const officeBackground = new Image();
     let jordanAnimationReady = false;
+    let officeBackgroundReady = false;
     let sprites: Sprites | null = null;
     let frame = 0;
     let active = true;
@@ -225,7 +234,7 @@ export function GameCanvas({ activeEmployeeIds, automationSeconds, events, feedb
     const draw = (time: number) => {
       if (!active) return;
       const scene = sceneRef.current;
-      drawOffice(context);
+      drawOffice(context, officeBackgroundReady ? officeBackground : null);
       const bob = scene.reducedMotion ? 0 : Math.sin(time / 260) * 1.6;
 
       scene.activeEmployeeIds.forEach((id, index) => {
@@ -294,8 +303,10 @@ export function GameCanvas({ activeEmployeeIds, automationSeconds, events, feedb
       frame = requestAnimationFrame(draw);
     };
     jordanAnimation.onload = () => { jordanAnimationReady = true; };
+    officeBackground.onload = () => { officeBackgroundReady = true; };
     image.src = sheetUrl;
     jordanAnimation.src = jordanAnimationUrl;
+    officeBackground.src = officeBackgroundUrl;
     return () => { active = false; cancelAnimationFrame(frame); };
   }, []);
 
