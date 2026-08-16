@@ -79,9 +79,14 @@ export function AuthForm({ mode }: { mode: "login" | "signup" | "forgot" }) {
     if (result.error) setMessage(result.error.message);
     else if (mode === "forgot") setMessage("Check your email for a secure reset link.");
     else if (mode === "signup") {
-      const session = await supabase.auth.getSession();
-      if (session.data.session) location.href = "/onboarding";
-      else setMessage("Check your email to confirm your account, then log in to finish setup.");
+      // Only trust the session returned by this signup. getSession() can return
+      // a locally cached token from a previously deleted account.
+      const signupSession = "session" in result.data ? result.data.session : null;
+      if (signupSession) location.href = "/onboarding";
+      else {
+        await supabase.auth.signOut({ scope: "local" });
+        setMessage("Check your email to confirm your account, then log in to finish setup.");
+      }
     }
     else location.href = "/dashboard";
     setBusy(false);
