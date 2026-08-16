@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { characterCrops, employees, eventLabels, GAME_HEIGHT, GAME_WIDTH } from "@/lib/game/config";
-import type { CharacterId, OfficeEvent, PlayerAction, Position } from "@/types/game";
+import { characterCrops, deliveryDoorPosition, employees, eventLabels, GAME_HEIGHT, GAME_WIDTH } from "@/lib/game/config";
+import type { CharacterId, DeliveryReward, OfficeEvent, PlayerAction, Position, RewardId } from "@/types/game";
 
 type Props = {
   activeEmployeeIds: string[];
   automationSeconds: number;
+  employeePositions: Record<string, Position>;
   events: OfficeEvent[];
   feedback: { label: string; x: number; y: number; perfect: boolean } | null;
-  inventory: string | null;
+  inventory: RewardId | null;
   player: Position;
   playerAction: PlayerAction;
   playerFacing: -1 | 1;
@@ -117,6 +118,42 @@ function drawAnimatedJordan(
   context.restore();
 }
 
+function drawDeliveryItem(context: CanvasRenderingContext2D, position: Position, item: DeliveryReward, scale = 1) {
+  context.save();
+  context.translate(position.x, position.y);
+  context.scale(scale, scale);
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  if (item === "balloons") {
+    const balloons = [[-10, -17, "#f36f55"], [2, -24, "#f3bd32"], [13, -15, "#4fa9df"]] as const;
+    balloons.forEach(([x, y, color]) => {
+      context.strokeStyle = "#4f625e";
+      context.lineWidth = 1.4;
+      context.beginPath(); context.moveTo(x, y + 10); context.lineTo(1, 15); context.stroke();
+      context.fillStyle = color;
+      context.beginPath(); context.ellipse(x, y, 8, 10, 0, 0, Math.PI * 2); context.fill();
+      context.strokeStyle = "rgba(20,44,54,.45)"; context.stroke();
+    });
+  } else if (item === "cake") {
+    context.fillStyle = "#f8d7b2";
+    roundedRect(context, -17, -8, 34, 22, 5); context.fill();
+    context.fillStyle = "#f36f55"; context.fillRect(-17, 0, 34, 5);
+    context.fillStyle = "#fff8e8";
+    roundedRect(context, -18, -12, 36, 9, 4); context.fill();
+    [-9, 0, 9].forEach((x) => {
+      context.fillStyle = "#4fa9df"; context.fillRect(x - 1, -21, 2, 9);
+      context.fillStyle = "#f1ab27"; context.beginPath(); context.arc(x, -23, 2.4, 0, Math.PI * 2); context.fill();
+    });
+  } else {
+    context.fillStyle = "#fff8e9";
+    roundedRect(context, -18, -12, 36, 26, 4); context.fill();
+    context.strokeStyle = "#d85e49"; context.lineWidth = 2; context.stroke();
+    context.beginPath(); context.moveTo(-16, -9); context.lineTo(0, 3); context.lineTo(16, -9); context.stroke();
+    context.fillStyle = "#f36f55"; context.beginPath(); context.arc(0, 5, 3.5, 0, Math.PI * 2); context.fill();
+  }
+  context.restore();
+}
+
 function drawOffice(context: CanvasRenderingContext2D, background: HTMLImageElement | null) {
   if (background) {
     context.drawImage(background, 0, 0, GAME_WIDTH, GAME_HEIGHT);
@@ -200,22 +237,23 @@ function drawEventBubble(context: CanvasRenderingContext2D, event: OfficeEvent, 
   context.textAlign = "center";
   context.fillStyle = "#172e43";
   context.font = "900 11px sans-serif";
-  context.fillText(event.stage === "pickup" ? "RILEY" : definition.label.toUpperCase(), 0, -9);
+  const deliveryLabel = event.deliveryReward === "balloons" ? "BALLOONS" : event.deliveryReward === "cake" ? "CAKE" : "CARD";
+  context.fillText(event.stage === "pickup" ? `PICK UP ${deliveryLabel}` : event.stage === "deliver" ? `DELIVER ${deliveryLabel}` : definition.label.toUpperCase(), 0, -9);
   context.font = "19px sans-serif";
-  context.fillText(definition.icon, -25, 14);
+  context.fillText(event.deliveryReward === "balloons" ? "🎈" : event.deliveryReward === "cake" ? "🎂" : event.deliveryReward === "card" ? "✉" : definition.icon, -25, 14);
   context.fillStyle = warning ? "#c9442e" : "#344f49";
   context.font = "900 14px monospace";
   context.fillText(`00:${Math.max(0, Math.ceil(event.remaining)).toString().padStart(2, "0")}`, 17, 12);
   context.restore();
 }
 
-export function GameCanvas({ activeEmployeeIds, automationSeconds, events, feedback, inventory, player, playerAction, playerFacing, reducedMotion }: Props) {
+export function GameCanvas({ activeEmployeeIds, automationSeconds, employeePositions, events, feedback, inventory, player, playerAction, playerFacing, reducedMotion }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const sceneRef = useRef<Props>({ activeEmployeeIds, automationSeconds, events, feedback, inventory, player, playerAction, playerFacing, reducedMotion });
+  const sceneRef = useRef<Props>({ activeEmployeeIds, automationSeconds, employeePositions, events, feedback, inventory, player, playerAction, playerFacing, reducedMotion });
 
   useEffect(() => {
-    sceneRef.current = { activeEmployeeIds, automationSeconds, events, feedback, inventory, player, playerAction, playerFacing, reducedMotion };
-  }, [activeEmployeeIds, automationSeconds, events, feedback, inventory, player, playerAction, playerFacing, reducedMotion]);
+    sceneRef.current = { activeEmployeeIds, automationSeconds, employeePositions, events, feedback, inventory, player, playerAction, playerFacing, reducedMotion };
+  }, [activeEmployeeIds, automationSeconds, employeePositions, events, feedback, inventory, player, playerAction, playerFacing, reducedMotion]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -240,30 +278,29 @@ export function GameCanvas({ activeEmployeeIds, automationSeconds, events, feedb
       scene.activeEmployeeIds.forEach((id, index) => {
         const employee = employees.find((item) => item.id === id);
         if (!employee || !sprites) return;
-        drawCharacter(context, sprites, employee.character, employee.position, employee.character === "sam" ? 108 : 116, bob * (index % 2 ? -1 : 1));
+        const employeePosition = scene.employeePositions[id] ?? employee.position;
+        drawCharacter(context, sprites, employee.character, employeePosition, employee.character === "sam" ? 108 : 116, bob * (index % 2 ? -1 : 1));
         context.textAlign = "center";
         context.font = "800 10px sans-serif";
         context.fillStyle = "#253b45";
-        context.fillText(employee.name, employee.position.x, employee.position.y + 15);
+        context.fillText(employee.name, employeePosition.x, employeePosition.y + 15);
       });
 
-      const pickup = scene.events.some((event) => event.stage === "pickup");
-      if (pickup && sprites) drawCharacter(context, sprites, "riley", { x: 108, y: 302 }, 126, bob);
+      const pickup = scene.events.find((event) => event.stage === "pickup");
+      if (pickup && sprites) {
+        drawCharacter(context, sprites, "riley", deliveryDoorPosition, 126, bob);
+        drawDeliveryItem(context, { x: deliveryDoorPosition.x + 34, y: deliveryDoorPosition.y - 61 }, pickup.deliveryReward ?? "card", .8);
+      }
 
       scene.events.forEach((event) => {
         const employee = employees.find((item) => item.id === event.employeeId);
-        const position = event.stage === "pickup" ? { x: 108, y: 302 } : employee?.position;
+        const position = event.stage === "pickup" ? deliveryDoorPosition : scene.employeePositions[event.employeeId] ?? employee?.position;
         if (position) drawEventBubble(context, event, position, time);
       });
 
       if (jordanAnimationReady) drawAnimatedJordan(context, jordanAnimation, scene.playerAction, scene.playerFacing, scene.player, scene.reducedMotion, time);
       else if (sprites) drawCharacter(context, sprites, "jordan", scene.player, 142, bob * .6);
-      if (scene.inventory) {
-        context.fillStyle = "#f36f55";
-        roundedRect(context, scene.player.x + 22, scene.player.y - 92, 42, 26, 8); context.fill();
-        context.fillStyle = "white"; context.textAlign = "center"; context.font = "900 9px sans-serif";
-        context.fillText("LOCAL", scene.player.x + 43, scene.player.y - 75);
-      }
+      if (scene.inventory === "balloons" || scene.inventory === "card" || scene.inventory === "cake") drawDeliveryItem(context, { x: scene.player.x + 39, y: scene.player.y - 94 }, scene.inventory, .9);
 
       if (scene.automationSeconds > 0) {
         context.strokeStyle = `rgba(255,195,54,${.5 + Math.sin(time / 150) * .25})`;

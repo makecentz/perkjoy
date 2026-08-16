@@ -10,15 +10,19 @@ import {
 import { Logo } from "@/components/brand/Logo";
 import { OfficeRushAudio } from "@/lib/game/audio";
 import { trackGameEvent } from "@/lib/game/analytics";
-import { employees, endlessLevel, eventLabels, GAME_HEIGHT, GAME_WIDTH, levels, recommendedRewards, rewards } from "@/lib/game/config";
-import { celebrationResult, clamp, distance, makeEvent, rankForScore } from "@/lib/game/simulation";
+import { deliveryDoorPosition, employeeWalkPoints, employees, endlessLevel, eventLabels, levels, officeColliders, PLAYER_RADIUS, recommendedRewards, rewards } from "@/lib/game/config";
+import { celebrationResult, clamp, distance, makeEvent, moveWithOfficeCollisions, rankForScore } from "@/lib/game/simulation";
 import { defaultAudio, defaultScores, loadAudio, loadScores, saveAudio, saveScores } from "@/lib/game/storage";
 import type { AudioPreferences, GameMode, GameStats, HighScores, LevelDefinition, OfficeEvent, PlayerAction, Position, RewardId } from "@/types/game";
 import { GameCanvas } from "./GameCanvas";
 import styles from "./office-rush.module.css";
 
 const initialStats: GameStats = { score: 0, morale: 100, celebrated: 0, missed: 0, bestCombo: 1, combo: 1 };
-const startPosition = { x: 430, y: 458 };
+const startPosition = { x: 570, y: 300 };
+
+function createEmployeePositions() {
+  return Object.fromEntries(employees.map((employee) => [employee.id, { ...employee.position }])) as Record<string, Position>;
+}
 
 function formatTime(total: number) {
   const seconds = Math.max(0, Math.ceil(total));
@@ -33,11 +37,12 @@ export function OfficeRushGame() {
   const [events, setEvents] = useState<OfficeEvent[]>([]);
   const [stats, setStats] = useState<GameStats>(initialStats);
   const [player, setPlayer] = useState<Position>(startPosition);
+  const [employeePositions, setEmployeePositions] = useState<Record<string, Position>>(createEmployeePositions);
   const [playerAction, setPlayerAction] = useState<PlayerAction>("idle");
   const [playerFacing, setPlayerFacing] = useState<-1 | 1>(1);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [selectedRewards, setSelectedRewards] = useState<RewardId[]>([]);
-  const [inventory, setInventory] = useState<string | null>(null);
+  const [inventory, setInventory] = useState<RewardId | null>(null);
   const [automationCharge, setAutomationCharge] = useState(0);
   const [automationSeconds, setAutomationSeconds] = useState(0);
   const [feedback, setFeedback] = useState<{ label: string; x: number; y: number; perfect: boolean } | null>(null);
@@ -48,6 +53,8 @@ export function OfficeRushGame() {
   const [shareMessage, setShareMessage] = useState("");
   const keyState = useRef(new Set<string>());
   const eventsRef = useRef<OfficeEvent[]>([]);
+  const employeePositionsRef = useRef<Record<string, Position>>(createEmployeePositions());
+  const employeeWaypointRef = useRef<Record<string, number>>(Object.fromEntries(employees.map((employee, index) => [employee.id, (index + 1) % employeeWalkPoints.length])));
   const joystickVector = useRef({ x: 0, y: 0 });
   const joystickPointer = useRef<number | null>(null);
   const spawnAccumulator = useRef(0);
@@ -55,10 +62,14 @@ export function OfficeRushGame() {
   const playerActionRef = useRef<PlayerAction>("idle");
   const playerFacingRef = useRef<-1 | 1>(1);
   const actionTimer = useRef<number | null>(null);
+  const interactHandlerRef = useRef<() => void>(() => undefined);
+  const quickRewardHandlerRef = useRef<() => void>(() => undefined);
+  const automationHandlerRef = useRef<() => void>(() => undefined);
   const audio = useRef<OfficeRushAudio | null>(null);
   const modeRef = useRef<GameMode>(mode);
   const level: LevelDefinition = endless ? endlessLevel : levels[levelIndex];
   const selectedEvent = events.find((event) => event.id === selectedEventId) ?? null;
+  const inventoryLabel = inventory ? rewards.find((reward) => reward.id === inventory)?.label ?? "delivery" : null;
   useEffect(() => {
     const scores = loadScores();
     const settings = loadAudio();
@@ -89,6 +100,14 @@ export function OfficeRushGame() {
     setPlayerAction(action);
   }, []);
 
+  const resetInput = useCallback(() => {
+    keyState.current.clear();
+    joystickPointer.current = null;
+    joystickVector.current = { x: 0, y: 0 };
+    setJoystick({ x: 0, y: 0 });
+    if (playerActionRef.current === "walk") updatePlayerAction("idle");
+  }, [updatePlayerAction]);
+
   const playPlayerAction = useCallback((action: Extract<PlayerAction, "grab" | "give">) => {
     if (actionTimer.current !== null) window.clearTimeout(actionTimer.current);
     updatePlayerAction(action);
@@ -109,6 +128,11 @@ export function OfficeRushGame() {
     eventsRef.current = [];
     setEvents([]);
     setPlayer(startPosition);
+    const nextEmployeePositions = createEmployeePositions();
+    employeePositionsRef.current = nextEmployeePositions;
+    setEmployeePositions(nextEmployeePositions);
+    employeeWaypointRef.current = Object.fromEntries(employees.map((employee, employeeIndex) => [employee.id, (employeeIndex + 1) % employeeWalkPoints.length]));
+    resetInput();
     playerFacingRef.current = 1;
     setPlayerFacing(1);
     updatePlayerAction("idle");
@@ -124,7 +148,7 @@ export function OfficeRushGame() {
     sequence.current = 0;
     setMode("playing");
     trackGameEvent("level_started", { level: nextLevel.id, endless: isEndless });
-  }, [endless, levelIndex, updatePlayerAction]);
+  }, [endless, levelIndex, resetInput, updatePlayerAction]);
 
   const openLevel = useCallback((index: number, isEndless = false) => {
     setLevelIndex(index);
@@ -134,8 +158,8 @@ export function OfficeRushGame() {
   }, []);
 
   const rewardPosition = useCallback((event: OfficeEvent) => {
-    if (event.stage === "pickup") return { x: 108, y: 302 };
-    return employees.find((employee) => employee.id === event.employeeId)?.position ?? { x: 480, y: 270 };
+    if (event.stage === "pickup") return deliveryDoorPosition;
+    return employeePositionsRef.current[event.employeeId] ?? { x: 480, y: 270 };
   }, []);
 
   const completeEvent = useCallback((eventId: string, chosen: RewardId[]) => {
@@ -143,11 +167,11 @@ export function OfficeRushGame() {
     if (!event) return;
     if (event.stage === "pickup") {
       playPlayerAction("grab");
-      const next = eventsRef.current.map((item) => item.id === eventId ? { ...item, stage: "deliver" as const } : item);
+      const next = eventsRef.current.map((item) => item.id === eventId ? { ...item, stage: "deliver" as const, remaining: Math.max(item.remaining, 18) } : item);
       eventsRef.current = next;
       setEvents(next);
-      setInventory("PerkJoy Local delivery");
-      setFeedback({ label: "DELIVERY RECEIVED", x: 108, y: 302, perfect: false });
+      setInventory(event.deliveryReward ?? "card");
+      setFeedback({ label: "DELIVERY PICKED UP — HURRY!", x: deliveryDoorPosition.x, y: deliveryDoorPosition.y, perfect: false });
       setTimeout(() => setFeedback(null), 1100);
       audio.current?.effect("delivery");
       setSelectedEventId(null);
@@ -189,9 +213,10 @@ export function OfficeRushGame() {
       return;
     }
     if (nearby.stage === "pickup") completeEvent(nearby.id, []);
+    else if (nearby.stage === "deliver") completeEvent(nearby.id, [nearby.deliveryReward ?? "card"]);
     else {
       setSelectedEventId(nearby.id);
-      setSelectedRewards(nearby.stage === "deliver" ? ["gift-box"] : []);
+      setSelectedRewards([]);
       audio.current?.effect("click");
       if (tutorialStep === 1) setTutorialStep(2);
     }
@@ -206,7 +231,7 @@ export function OfficeRushGame() {
       .map((event) => ({ event, distance: distance(player, rewardPosition(event)) }))
       .filter((item) => item.distance <= 92 && item.event.stage !== "pickup")
       .sort((a, b) => a.distance - b.distance)[0]?.event;
-    if (nearby) completeEvent(nearby.id, recommendedRewards[nearby.type].slice(0, 1));
+    if (nearby) completeEvent(nearby.id, nearby.stage === "deliver" ? [nearby.deliveryReward ?? "card"] : recommendedRewards[nearby.type].slice(0, 1));
     else interact();
   }, [completeEvent, events, interact, player, rewardPosition, selectedEvent, selectedRewards]);
 
@@ -221,19 +246,52 @@ export function OfficeRushGame() {
   }, [automationCharge, automationSeconds, level.id]);
 
   useEffect(() => {
+    interactHandlerRef.current = interact;
+    quickRewardHandlerRef.current = quickReward;
+    automationHandlerRef.current = activateAutomation;
+  }, [activateAutomation, interact, quickReward]);
+
+  useEffect(() => {
+    const movementKeys = new Set(["arrowup", "arrowdown", "arrowleft", "arrowright", "w", "a", "s", "d"]);
     const onKeyDown = (event: KeyboardEvent) => {
-      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(event.key)) event.preventDefault();
-      keyState.current.add(event.key.toLowerCase());
-      if (event.key === " " && !event.repeat) interact();
-      if (event.key.toLowerCase() === "e" && !event.repeat) quickReward();
-      if (event.key.toLowerCase() === "a" && !event.repeat) activateAutomation();
-      if (event.key === "Escape" && !event.repeat) setMode((current) => current === "playing" ? "paused" : current === "paused" ? "playing" : current);
+      const key = event.key.toLowerCase();
+      if (event.key === "Escape" && !event.repeat) {
+        resetInput();
+        setMode((current) => current === "playing" ? "paused" : current === "paused" ? "playing" : current);
+        return;
+      }
+      if (modeRef.current !== "playing") return;
+      if (movementKeys.has(key)) {
+        event.preventDefault();
+        keyState.current.add(key);
+      }
+      if (event.key === " " && !event.repeat) { event.preventDefault(); interactHandlerRef.current(); }
+      if (key === "e" && !event.repeat) quickRewardHandlerRef.current();
+      if (key === "q" && !event.repeat) automationHandlerRef.current();
     };
     const onKeyUp = (event: KeyboardEvent) => keyState.current.delete(event.key.toLowerCase());
+    const onBlur = () => resetInput();
+    const onVisibility = () => {
+      resetInput();
+      if (document.hidden && modeRef.current === "playing") setMode("paused");
+    };
     window.addEventListener("keydown", onKeyDown, { passive: false });
     window.addEventListener("keyup", onKeyUp);
-    return () => { window.removeEventListener("keydown", onKeyDown); window.removeEventListener("keyup", onKeyUp); };
-  }, [activateAutomation, interact, quickReward]);
+    window.addEventListener("blur", onBlur);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onBlur);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [resetInput]);
+
+  useEffect(() => {
+    if (mode === "playing") return;
+    const timer = window.setTimeout(resetInput, 0);
+    return () => window.clearTimeout(timer);
+  }, [mode, resetInput]);
 
   useEffect(() => {
     let frame = 0;
@@ -256,7 +314,7 @@ export function OfficeRushGame() {
               setPlayerFacing(facing);
             }
           }
-          setPlayer((current) => ({ x: clamp(current.x + x * 188 * delta, 42, GAME_WIDTH - 40), y: clamp(current.y + y * 188 * delta, 135, GAME_HEIGHT - 25) }));
+          setPlayer((current) => moveWithOfficeCollisions(current, { x: x * 188 * delta, y: y * 188 * delta }, officeColliders, PLAYER_RADIUS));
         } else if (playerActionRef.current === "walk") updatePlayerAction("idle");
       }
       frame = requestAnimationFrame(move);
@@ -264,6 +322,47 @@ export function OfficeRushGame() {
     frame = requestAnimationFrame(move);
     return () => cancelAnimationFrame(frame);
   }, [selectedEventId, updatePlayerAction]);
+
+  useEffect(() => {
+    if (mode !== "playing") return;
+    let frame = 0;
+    let previous = performance.now();
+    let lastPublished = 0;
+    const walkEmployees = (now: number) => {
+      const delta = Math.min(.05, (now - previous) / 1000);
+      previous = now;
+      const next = { ...employeePositionsRef.current };
+      level.employeeIds.forEach((employeeId, index) => {
+        const current = next[employeeId] ?? employeeWalkPoints[index % employeeWalkPoints.length];
+        let waypointIndex = employeeWaypointRef.current[employeeId] ?? (index + 1) % employeeWalkPoints.length;
+        let target = employeeWalkPoints[waypointIndex];
+        let gap = distance(current, target);
+        if (gap < 8) {
+          waypointIndex = (waypointIndex + 1) % employeeWalkPoints.length;
+          employeeWaypointRef.current[employeeId] = waypointIndex;
+          target = employeeWalkPoints[waypointIndex];
+          gap = distance(current, target);
+        }
+        if (gap > 0) {
+          const speed = 22 + (index % 3) * 3;
+          const moved = moveWithOfficeCollisions(current, {
+            x: ((target.x - current.x) / gap) * speed * delta,
+            y: ((target.y - current.y) / gap) * speed * delta,
+          }, officeColliders, 12);
+          if (distance(current, moved) < .05) employeeWaypointRef.current[employeeId] = (waypointIndex + 1) % employeeWalkPoints.length;
+          next[employeeId] = moved;
+        }
+      });
+      employeePositionsRef.current = next;
+      if (now - lastPublished >= 55) {
+        setEmployeePositions({ ...next });
+        lastPublished = now;
+      }
+      frame = requestAnimationFrame(walkEmployees);
+    };
+    frame = requestAnimationFrame(walkEmployees);
+    return () => cancelAnimationFrame(frame);
+  }, [level, mode]);
 
   useEffect(() => {
     if (mode !== "playing") return;
@@ -280,13 +379,16 @@ export function OfficeRushGame() {
       if (expired.length) {
         next = next.filter((event) => event.remaining > 0);
         setStats((currentStats) => ({ ...currentStats, morale: clamp(currentStats.morale - expired.length * 14, 0, 100), missed: currentStats.missed + expired.length, combo: 1 }));
-        setInventory(null);
+        if (expired.some((event) => event.stage === "deliver")) setInventory(null);
         audio.current?.effect("morale-down");
       }
       if (spawnAccumulator.current >= level.spawnEvery && next.length < level.simultaneous) {
         spawnAccumulator.current = 0;
         sequence.current += 1;
-        const type = level.id === 1 && sequence.current === 1 ? "birthday" : level.eventTypes[sequence.current % level.eventTypes.length];
+        const queuedType = level.id === 1 && sequence.current === 1 ? "birthday" : level.eventTypes[(sequence.current - 1) % level.eventTypes.length];
+        const type = queuedType === "delivery" && next.some((event) => event.type === "delivery")
+          ? level.eventTypes.find((eventType) => eventType !== "delivery") ?? queuedType
+          : queuedType;
         const available = level.employeeIds.filter((id) => !next.some((event) => event.employeeId === id));
         const employeeId = level.id === 1 && sequence.current === 1 ? "alex" : available[sequence.current % Math.max(1, available.length)] ?? level.employeeIds[0];
         next.push(makeEvent(type, employeeId, level.id, sequence.current));
@@ -325,12 +427,6 @@ export function OfficeRushGame() {
     const timer = window.setTimeout(() => finishLevel(stats.morale <= 0), 0);
     return () => window.clearTimeout(timer);
   }, [endless, finishLevel, mode, stats.morale, timeRemaining]);
-
-  useEffect(() => {
-    const onVisibility = () => { if (document.hidden && modeRef.current === "playing") setMode("paused"); };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, []);
 
   function toggleReward(id: RewardId) {
     setSelectedRewards((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
@@ -391,7 +487,7 @@ export function OfficeRushGame() {
             <button className="button button-secondary" onClick={() => setMode("high-scores")}><Trophy /> High Scores</button>
             {highScores.unlockedEndless && <button className={styles.endlessButton} onClick={() => openLevel(0, true)}><Zap /> Office Rush — Endless</button>}
           </div>
-          {mode === "how-to" && <aside className={styles.menuPanel}><button aria-label="Close how to play" onClick={() => setMode("menu")}>×</button><Gamepad2 /><h2>Keep the moments moving.</h2><ol><li><b>Move</b><span>WASD, arrow keys, or the touch joystick.</span></li><li><b>Interact</b><span>Press Space or INTERACT near an employee.</span></li><li><b>Celebrate</b><span>Choose the right rewards before time runs out.</span></li><li><b>Automate</b><span>Fill the lightning meter, then put appreciation on autopilot.</span></li></ol></aside>}
+          {mode === "how-to" && <aside className={styles.menuPanel}><button aria-label="Close how to play" onClick={() => setMode("menu")}>×</button><Gamepad2 /><h2>Keep the moments moving.</h2><ol><li><b>Move</b><span>WASD, arrow keys, or the touch joystick.</span></li><li><b>Interact</b><span>Press Space or INTERACT near a moving employee.</span></li><li><b>Deliver</b><span>Meet Riley at the door, collect the item, then catch the employee.</span></li><li><b>Automate</b><span>Fill the lightning meter, then press Q to put appreciation on autopilot.</span></li></ol></aside>}
           {mode === "high-scores" && <aside className={styles.menuPanel}><button aria-label="Close high scores" onClick={() => setMode("menu")}>×</button><Award /><h2>Your office records</h2><dl><div><dt>Highest score</dt><dd>{highScores.highestScore.toLocaleString()}</dd></div><div><dt>Best endless run</dt><dd>{highScores.bestEndlessRun.toLocaleString()}</dd></div><div><dt>Highest morale</dt><dd>{highScores.highestMorale}%</dd></div><div><dt>Employees celebrated</dt><dd>{highScores.mostCelebrated}</dd></div></dl></aside>}
         </section>
         <small className={styles.menuFoot}>Free browser game · No download required</small>
@@ -420,21 +516,21 @@ export function OfficeRushGame() {
         </header>
 
         <section className={styles.canvasWrap}>
-          <GameCanvas activeEmployeeIds={level.employeeIds} automationSeconds={automationSeconds} events={events} feedback={feedback} inventory={inventory} player={player} playerAction={playerAction} playerFacing={playerFacing} reducedMotion={audioSettings.reducedMotion} />
-          <div className={styles.objectiveBar}><span><b>{events.length}</b> active moment{events.length === 1 ? "" : "s"}</span><span>{inventory ? <><Gift /> Deliver the PerkJoy Local order</> : <><Sparkles /> Reach an employee before their timer ends</>}</span></div>
+          <GameCanvas activeEmployeeIds={level.employeeIds} automationSeconds={automationSeconds} employeePositions={employeePositions} events={events} feedback={feedback} inventory={inventory} player={player} playerAction={playerAction} playerFacing={playerFacing} reducedMotion={audioSettings.reducedMotion} />
+          <div className={styles.objectiveBar}><span><b>{events.length}</b> active moment{events.length === 1 ? "" : "s"}</span><span>{inventory ? <><Gift /> Deliver the {inventoryLabel}</> : <><Sparkles /> Catch an employee or meet Riley at the door</>}</span></div>
           {tutorialStep > 0 && tutorialStep < 4 && <div className={styles.tutorial}><span>SAM&apos;S TIP</span><b>{tutorialStep === 1 ? "Move Jordan to Alex." : tutorialStep === 2 ? "Choose birthday rewards." : "Deliver it before time runs out."}</b></div>}
 
           <button className={`${styles.automation} ${automationCharge >= 100 ? styles.ready : ""}`} onClick={activateAutomation} disabled={automationCharge < 100 || automationSeconds > 0}><Zap /><span><small>{automationSeconds > 0 ? "AUTOMATION ACTIVE" : "PERKJOY AUTOMATION"}</small><b>{automationSeconds > 0 ? `${Math.ceil(automationSeconds)}s remaining` : automationCharge >= 100 ? "Activate autopilot" : `${Math.round(automationCharge)}% charged`}</b></span><i><em style={{ width: `${automationSeconds > 0 ? 100 : automationCharge}%` }} /></i></button>
 
           <div className={styles.touchControls}>
-            <div className={styles.joystick} onPointerDown={beginJoystick} onPointerMove={updateJoystick} onPointerUp={endJoystick} onPointerCancel={endJoystick}><i style={{ transform: `translate(${joystick.x * 28}px, ${joystick.y * 28}px)` }} /></div>
+            <div className={styles.joystick} onPointerDown={beginJoystick} onPointerMove={updateJoystick} onPointerUp={endJoystick} onPointerCancel={endJoystick} onLostPointerCapture={endJoystick}><i style={{ transform: `translate(${joystick.x * 28}px, ${joystick.y * 28}px)` }} /></div>
             <div><button onPointerDown={(event) => { event.preventDefault(); interact(); }}><Check />Interact</button><button onPointerDown={(event) => { event.preventDefault(); quickReward(); }}><Gift />Reward</button></div>
           </div>
         </section>
 
-        <footer className={styles.gameFooter}><span><b>Move</b> WASD / Arrow Keys</span><span><b>Interact</b> Space</span><span><b>Quick Reward</b> E</span><span><b>Automation</b> A</span><button onClick={() => void enterFullscreen()}><Maximize2 /> Enter Fullscreen</button></footer>
+        <footer className={styles.gameFooter}><span><b>Move</b> WASD / Arrow Keys</span><span><b>Interact</b> Space</span><span><b>Quick Reward</b> E</span><span><b>Automation</b> Q</span><button onClick={() => void enterFullscreen()}><Maximize2 /> Enter Fullscreen</button></footer>
 
-        {selectedEvent && <div className={styles.rewardOverlay}><section><header><span style={{ background: eventLabels[selectedEvent.type].color }}>{eventLabels[selectedEvent.type].icon}</span><div><small>{employees.find((employee) => employee.id === selectedEvent.employeeId)?.name}</small><h2>{selectedEvent.stage === "deliver" ? "Complete the local delivery" : `Choose a ${eventLabels[selectedEvent.type].label.toLowerCase()} reward`}</h2></div><b>{Math.ceil(selectedEvent.remaining)}s</b></header><div className={styles.rewardGrid}>{rewards.filter((reward) => selectedEvent.stage === "deliver" ? reward.id === "gift-box" : recommendedRewards[selectedEvent.type].includes(reward.id) || reward.id === "gift-card").map((reward) => <button key={reward.id} className={selectedRewards.includes(reward.id) ? styles.selected : ""} onClick={() => toggleReward(reward.id)}><span>{reward.icon}</span><b>{reward.label}</b><small>+{reward.points} points</small></button>)}</div><footer><button className="button button-ghost" onClick={() => setSelectedEventId(null)}>Keep moving</button><button className="button button-primary" disabled={!selectedRewards.length} onClick={() => completeEvent(selectedEvent.id, selectedRewards)}>Celebrate <Sparkles /></button></footer></section></div>}
+        {selectedEvent && <div className={styles.rewardOverlay}><section><header><span style={{ background: eventLabels[selectedEvent.type].color }}>{eventLabels[selectedEvent.type].icon}</span><div><small>{employees.find((employee) => employee.id === selectedEvent.employeeId)?.name}</small><h2>{selectedEvent.stage === "deliver" ? "Complete the local delivery" : `Choose a ${eventLabels[selectedEvent.type].label.toLowerCase()} reward`}</h2></div><b>{Math.ceil(selectedEvent.remaining)}s</b></header><div className={styles.rewardGrid}>{rewards.filter((reward) => selectedEvent.stage === "deliver" ? reward.id === selectedEvent.deliveryReward : recommendedRewards[selectedEvent.type].includes(reward.id) || reward.id === "gift-card").map((reward) => <button key={reward.id} className={selectedRewards.includes(reward.id) ? styles.selected : ""} onClick={() => toggleReward(reward.id)}><span>{reward.icon}</span><b>{reward.label}</b><small>+{reward.points} points</small></button>)}</div><footer><button className="button button-ghost" onClick={() => setSelectedEventId(null)}>Keep moving</button><button className="button button-primary" disabled={!selectedRewards.length} onClick={() => completeEvent(selectedEvent.id, selectedRewards)}>Celebrate <Sparkles /></button></footer></section></div>}
 
         {mode === "paused" && <div className={styles.pauseOverlay}><section><Pause /><h2>Office paused</h2><button className="button button-primary" onClick={() => setMode("playing")}><Play /> Resume</button><button className="button button-secondary" onClick={() => void startLevel(levelIndex, endless)}><RotateCcw /> Restart level</button><div className={styles.audioSettings}><label><span><Music2 /> Music</span><input type="range" min="0" max="1" step=".05" value={audioSettings.musicVolume} onChange={(event) => setting("musicVolume", Number(event.target.value))} /></label><label><span><Volume2 /> Sound effects</span><input type="range" min="0" max="1" step=".05" value={audioSettings.soundVolume} onChange={(event) => setting("soundVolume", Number(event.target.value))} /></label><button onClick={() => setting("musicEnabled", !audioSettings.musicEnabled)}>{audioSettings.musicEnabled ? <Music2 /> : <VolumeX />} Music {audioSettings.musicEnabled ? "On" : "Off"}</button><button onClick={() => setting("soundEnabled", !audioSettings.soundEnabled)}>{audioSettings.soundEnabled ? <Volume2 /> : <VolumeX />} Sound {audioSettings.soundEnabled ? "On" : "Off"}</button><label className={styles.motionSetting}><input type="checkbox" checked={audioSettings.reducedMotion} onChange={(event) => setting("reducedMotion", event.target.checked)} /> Reduce motion</label></div><button className={styles.quitButton} onClick={() => setMode("menu")}>Quit to game menu</button></section></div>}
 

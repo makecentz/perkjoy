@@ -1,5 +1,5 @@
-import { eventLabels, recommendedRewards, rewards } from "./config";
-import type { CelebrationResult, EventType, OfficeEvent, RewardId } from "@/types/game";
+import { deliveryRewards, eventLabels, GAME_HEIGHT, GAME_WIDTH, recommendedRewards, rewards } from "./config";
+import type { CelebrationResult, EventType, OfficeCollider, OfficeEvent, Position, RewardId } from "@/types/game";
 
 export function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value));
@@ -7,6 +7,28 @@ export function clamp(value: number, minimum: number, maximum: number) {
 
 export function distance(a: { x: number; y: number }, b: { x: number; y: number }) {
   return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+export function collidesWithOffice(position: Position, radius: number, colliders: OfficeCollider[]) {
+  return colliders.some((collider) => {
+    const closestX = clamp(position.x, collider.x, collider.x + collider.width);
+    const closestY = clamp(position.y, collider.y, collider.y + collider.height);
+    return Math.hypot(position.x - closestX, position.y - closestY) < radius;
+  });
+}
+
+export function moveWithOfficeCollisions(
+  current: Position,
+  delta: Position,
+  colliders: OfficeCollider[],
+  radius: number,
+) {
+  const next = { ...current };
+  const nextX = { x: clamp(current.x + delta.x, radius, GAME_WIDTH - radius), y: current.y };
+  if (!collidesWithOffice(nextX, radius, colliders)) next.x = nextX.x;
+  const nextY = { x: next.x, y: clamp(current.y + delta.y, radius, GAME_HEIGHT - radius) };
+  if (!collidesWithOffice(nextY, radius, colliders)) next.y = nextY.y;
+  return next;
 }
 
 export function eventDuration(type: EventType, levelId: number) {
@@ -49,6 +71,7 @@ export function makeEvent(type: EventType, employeeId: string, levelId: number, 
     duration,
     remaining: duration,
     stage: type === "delivery" ? "pickup" : "active",
+    deliveryReward: type === "delivery" ? deliveryRewards[sequence % deliveryRewards.length] : null,
     selectedRewards: [],
   };
 }
