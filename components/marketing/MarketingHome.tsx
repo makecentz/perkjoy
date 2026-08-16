@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { SocialProofToast } from "@/components/marketing/SocialProofToast";
+import { GameTeaser } from "@/components/game/GameTeaser";
 
 function Link({ href, children, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) {
   return <a href={href} {...props}>{children}</a>;
@@ -114,6 +115,8 @@ export function MarketingHome() {
           </div>
         </div>
       </section>
+
+      <GameTeaser />
 
       <section className="section shell preview-section">
         <div className="section-heading"><span>YOUR CELEBRATION COMMAND CENTER</span><h2>See every moment before it happens.</h2></div>

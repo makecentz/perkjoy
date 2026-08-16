@@ -15,7 +15,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: { default: "PerkJoy — Employee celebrations on autopilot", template: "%s | PerkJoy" },
     description,
-    icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
+    icons: { icon: "/icon.png", shortcut: "/icon.png" },
     openGraph: { title: "Never miss a moment worth celebrating.", description, type: "website", images: [{ url: imageUrl, width: 1200, height: 630, alt: "PerkJoy employee celebration automation" }] },
     twitter: { card: "summary_large_image", title: "Never miss a moment worth celebrating.", description, images: [imageUrl] },
   };

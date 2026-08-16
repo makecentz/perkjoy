@@ -1,0 +1,408 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import Link from "next/link";
+import {
+  ArrowLeft, Award, Check, ChevronRight, Clipboard, Gamepad2,
+  Gift, Heart, Info, Maximize2, Music2, Pause, Play, RotateCcw,
+  Share2, Sparkles, Trophy, Volume2, VolumeX, Zap,
+} from "lucide-react";
+import { Logo } from "@/components/brand/Logo";
+import { OfficeRushAudio } from "@/lib/game/audio";
+import { trackGameEvent } from "@/lib/game/analytics";
+import { employees, endlessLevel, eventLabels, GAME_HEIGHT, GAME_WIDTH, levels, recommendedRewards, rewards } from "@/lib/game/config";
+import { celebrationResult, clamp, distance, makeEvent, rankForScore } from "@/lib/game/simulation";
+import { defaultAudio, defaultScores, loadAudio, loadScores, saveAudio, saveScores } from "@/lib/game/storage";
+import type { AudioPreferences, GameMode, GameStats, HighScores, LevelDefinition, OfficeEvent, Position, RewardId } from "@/types/game";
+import { GameCanvas } from "./GameCanvas";
+import styles from "./office-rush.module.css";
+
+const initialStats: GameStats = { score: 0, morale: 100, celebrated: 0, missed: 0, bestCombo: 1, combo: 1 };
+const startPosition = { x: 430, y: 458 };
+
+function formatTime(total: number) {
+  const seconds = Math.max(0, Math.ceil(total));
+  return `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
+}
+
+export function OfficeRushGame() {
+  const [mode, setMode] = useState<GameMode>("menu");
+  const [levelIndex, setLevelIndex] = useState(0);
+  const [endless, setEndless] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState(levels[0].duration);
+  const [events, setEvents] = useState<OfficeEvent[]>([]);
+  const [stats, setStats] = useState<GameStats>(initialStats);
+  const [player, setPlayer] = useState<Position>(startPosition);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedRewards, setSelectedRewards] = useState<RewardId[]>([]);
+  const [inventory, setInventory] = useState<string | null>(null);
+  const [automationCharge, setAutomationCharge] = useState(0);
+  const [automationSeconds, setAutomationSeconds] = useState(0);
+  const [feedback, setFeedback] = useState<{ label: string; x: number; y: number; perfect: boolean } | null>(null);
+  const [tutorialStep, setTutorialStep] = useState(0);
+  const [highScores, setHighScores] = useState<HighScores>(defaultScores);
+  const [audioSettings, setAudioSettings] = useState<AudioPreferences>(defaultAudio);
+  const [joystick, setJoystick] = useState({ x: 0, y: 0 });
+  const [shareMessage, setShareMessage] = useState("");
+  const keyState = useRef(new Set<string>());
+  const eventsRef = useRef<OfficeEvent[]>([]);
+  const joystickVector = useRef({ x: 0, y: 0 });
+  const joystickPointer = useRef<number | null>(null);
+  const spawnAccumulator = useRef(0);
+  const sequence = useRef(0);
+  const audio = useRef<OfficeRushAudio | null>(null);
+  const modeRef = useRef<GameMode>(mode);
+  const level: LevelDefinition = endless ? endlessLevel : levels[levelIndex];
+  const selectedEvent = events.find((event) => event.id === selectedEventId) ?? null;
+  useEffect(() => {
+    const scores = loadScores();
+    const settings = loadAudio();
+    audio.current = new OfficeRushAudio(settings);
+    trackGameEvent("game_page_view");
+    const hydrate = window.setTimeout(() => {
+      setHighScores(scores);
+      setAudioSettings(settings);
+    }, 0);
+    return () => { window.clearTimeout(hydrate); audio.current?.destroy(); };
+  }, []);
+
+  useEffect(() => { modeRef.current = mode; }, [mode]);
+  useEffect(() => { audio.current?.update(audioSettings); saveAudio(audioSettings); }, [audioSettings]);
+
+  const persistScores = useCallback((partial: Partial<HighScores>) => {
+    const saved = saveScores(partial);
+    setHighScores(saved);
+  }, []);
+
+  const startLevel = useCallback(async (index = levelIndex, isEndless = endless) => {
+    const nextLevel = isEndless ? endlessLevel : levels[index];
+    await audio.current?.unlock();
+    audio.current?.startMusic();
+    audio.current?.effect("click");
+    setLevelIndex(index);
+    setEndless(isEndless);
+    setStats(initialStats);
+    eventsRef.current = [];
+    setEvents([]);
+    setPlayer(startPosition);
+    setTimeRemaining(nextLevel.duration);
+    setSelectedEventId(null);
+    setSelectedRewards([]);
+    setInventory(null);
+    setAutomationCharge(0);
+    setAutomationSeconds(0);
+    setFeedback(null);
+    setTutorialStep(nextLevel.id === 1 ? 1 : 0);
+    spawnAccumulator.current = nextLevel.spawnEvery;
+    sequence.current = 0;
+    setMode("playing");
+    trackGameEvent("level_started", { level: nextLevel.id, endless: isEndless });
+  }, [endless, levelIndex]);
+
+  const openLevel = useCallback((index: number, isEndless = false) => {
+    setLevelIndex(index);
+    setEndless(isEndless);
+    setMode("level-intro");
+    audio.current?.effect("click");
+  }, []);
+
+  const rewardPosition = useCallback((event: OfficeEvent) => {
+    if (event.stage === "pickup") return { x: 108, y: 302 };
+    return employees.find((employee) => employee.id === event.employeeId)?.position ?? { x: 480, y: 270 };
+  }, []);
+
+  const completeEvent = useCallback((eventId: string, chosen: RewardId[]) => {
+    const event = eventsRef.current.find((item) => item.id === eventId);
+    if (!event) return;
+    if (event.stage === "pickup") {
+      const next = eventsRef.current.map((item) => item.id === eventId ? { ...item, stage: "deliver" as const } : item);
+      eventsRef.current = next;
+      setEvents(next);
+      setInventory("PerkJoy Local delivery");
+      setFeedback({ label: "DELIVERY RECEIVED", x: 108, y: 302, perfect: false });
+      setTimeout(() => setFeedback(null), 1100);
+      audio.current?.effect("delivery");
+      setSelectedEventId(null);
+      return;
+    }
+    const result = celebrationResult(event, chosen.length ? chosen : recommendedRewards[event.type].slice(0, 1));
+    const position = rewardPosition(event);
+    const nextEvents = eventsRef.current.filter((item) => item.id !== eventId);
+    eventsRef.current = nextEvents;
+    setEvents(nextEvents);
+    setStats((current) => ({
+      ...current,
+      score: current.score + result.score,
+      morale: clamp(current.morale + result.morale, 0, 100),
+      celebrated: current.celebrated + 1,
+      combo: result.combo,
+      bestCombo: Math.max(current.bestCombo, result.combo),
+    }));
+    setAutomationCharge((current) => clamp(current + (result.perfect ? 35 : 24), 0, 100));
+    setInventory(null);
+    setSelectedEventId(null);
+    setSelectedRewards([]);
+    setFeedback({ label: result.label, x: position.x, y: position.y, perfect: result.perfect });
+    setTimeout(() => setFeedback(null), result.perfect ? 1700 : 1100);
+    audio.current?.effect(event.type === "birthday" ? "birthday" : "success");
+    setTutorialStep((step) => step > 0 ? Math.min(4, step + 1) : step);
+  }, [rewardPosition]);
+
+  const interact = useCallback(() => {
+    if (modeRef.current !== "playing") return;
+    const nearby = events
+      .map((event) => ({ event, distance: distance(player, rewardPosition(event)) }))
+      .filter((item) => item.distance <= 92)
+      .sort((a, b) => a.distance - b.distance)[0]?.event;
+    if (!nearby) {
+      setFeedback({ label: "MOVE CLOSER TO A MOMENT", x: player.x, y: player.y, perfect: false });
+      setTimeout(() => setFeedback(null), 750);
+      return;
+    }
+    if (nearby.stage === "pickup") completeEvent(nearby.id, []);
+    else {
+      setSelectedEventId(nearby.id);
+      setSelectedRewards(nearby.stage === "deliver" ? ["gift-box"] : []);
+      audio.current?.effect("click");
+      if (tutorialStep === 1) setTutorialStep(2);
+    }
+  }, [completeEvent, events, player, rewardPosition, tutorialStep]);
+
+  const quickReward = useCallback(() => {
+    if (selectedEvent) {
+      completeEvent(selectedEvent.id, selectedRewards.length ? selectedRewards : recommendedRewards[selectedEvent.type].slice(0, 1));
+      return;
+    }
+    const nearby = events
+      .map((event) => ({ event, distance: distance(player, rewardPosition(event)) }))
+      .filter((item) => item.distance <= 92 && item.event.stage !== "pickup")
+      .sort((a, b) => a.distance - b.distance)[0]?.event;
+    if (nearby) completeEvent(nearby.id, recommendedRewards[nearby.type].slice(0, 1));
+    else interact();
+  }, [completeEvent, events, interact, player, rewardPosition, selectedEvent, selectedRewards]);
+
+  const activateAutomation = useCallback(() => {
+    if (automationCharge < 100 || automationSeconds > 0 || modeRef.current !== "playing") return;
+    setAutomationCharge(0);
+    setAutomationSeconds(15);
+    setFeedback({ label: "APPRECIATION ON AUTOPILOT!", x: 480, y: 210, perfect: true });
+    setTimeout(() => setFeedback(null), 1700);
+    audio.current?.effect("automation");
+    trackGameEvent("automation_powerup_used", { level: level.id });
+  }, [automationCharge, automationSeconds, level.id]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(event.key)) event.preventDefault();
+      keyState.current.add(event.key.toLowerCase());
+      if (event.key === " " && !event.repeat) interact();
+      if (event.key.toLowerCase() === "e" && !event.repeat) quickReward();
+      if (event.key.toLowerCase() === "a" && !event.repeat) activateAutomation();
+      if (event.key === "Escape" && !event.repeat) setMode((current) => current === "playing" ? "paused" : current === "paused" ? "playing" : current);
+    };
+    const onKeyUp = (event: KeyboardEvent) => keyState.current.delete(event.key.toLowerCase());
+    window.addEventListener("keydown", onKeyDown, { passive: false });
+    window.addEventListener("keyup", onKeyUp);
+    return () => { window.removeEventListener("keydown", onKeyDown); window.removeEventListener("keyup", onKeyUp); };
+  }, [activateAutomation, interact, quickReward]);
+
+  useEffect(() => {
+    let frame = 0;
+    let previous = performance.now();
+    const move = (now: number) => {
+      const delta = Math.min(.04, (now - previous) / 1000);
+      previous = now;
+      if (modeRef.current === "playing" && !selectedEventId) {
+        const keys = keyState.current;
+        let x = (keys.has("arrowright") || keys.has("d") ? 1 : 0) - (keys.has("arrowleft") || keys.has("a") ? 1 : 0) + joystickVector.current.x;
+        let y = (keys.has("arrowdown") || keys.has("s") ? 1 : 0) - (keys.has("arrowup") || keys.has("w") ? 1 : 0) + joystickVector.current.y;
+        const length = Math.hypot(x, y);
+        if (length > 0) {
+          x /= Math.max(1, length); y /= Math.max(1, length);
+          setPlayer((current) => ({ x: clamp(current.x + x * 188 * delta, 42, GAME_WIDTH - 40), y: clamp(current.y + y * 188 * delta, 135, GAME_HEIGHT - 25) }));
+        }
+      }
+      frame = requestAnimationFrame(move);
+    };
+    frame = requestAnimationFrame(move);
+    return () => cancelAnimationFrame(frame);
+  }, [selectedEventId]);
+
+  useEffect(() => {
+    if (mode !== "playing") return;
+    let previous = performance.now();
+    const timer = window.setInterval(() => {
+      const now = performance.now();
+      const delta = Math.min(.3, (now - previous) / 1000);
+      previous = now;
+      setTimeRemaining((current) => current - delta);
+      setAutomationSeconds((current) => Math.max(0, current - delta));
+      spawnAccumulator.current += delta;
+      let next = eventsRef.current.map((event) => ({ ...event, remaining: event.remaining - delta }));
+      const expired = next.filter((event) => event.remaining <= 0);
+      if (expired.length) {
+        next = next.filter((event) => event.remaining > 0);
+        setStats((currentStats) => ({ ...currentStats, morale: clamp(currentStats.morale - expired.length * 14, 0, 100), missed: currentStats.missed + expired.length, combo: 1 }));
+        setInventory(null);
+        audio.current?.effect("morale-down");
+      }
+      if (spawnAccumulator.current >= level.spawnEvery && next.length < level.simultaneous) {
+        spawnAccumulator.current = 0;
+        sequence.current += 1;
+        const type = level.id === 1 && sequence.current === 1 ? "birthday" : level.eventTypes[sequence.current % level.eventTypes.length];
+        const available = level.employeeIds.filter((id) => !next.some((event) => event.employeeId === id));
+        const employeeId = level.id === 1 && sequence.current === 1 ? "alex" : available[sequence.current % Math.max(1, available.length)] ?? level.employeeIds[0];
+        next.push(makeEvent(type, employeeId, level.id, sequence.current));
+        if (type === "delivery") audio.current?.effect("delivery");
+      }
+      eventsRef.current = next;
+      setEvents(next);
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [level, mode]);
+
+  useEffect(() => {
+    if (mode !== "playing" || automationSeconds <= 0 || !events.length) return;
+    const event = events.find((item) => item.stage !== "pickup") ?? events[0];
+    const timer = window.setTimeout(() => {
+      if (event.stage === "pickup") completeEvent(event.id, []);
+      else completeEvent(event.id, recommendedRewards[event.type]);
+    }, 850);
+    return () => window.clearTimeout(timer);
+  }, [automationSeconds, completeEvent, events, mode]);
+
+  const finishLevel = useCallback((failed = false) => {
+    const bonus = !failed && stats.missed === 0 ? 1000 : 0;
+    const finalScore = stats.score + bonus;
+    setStats((current) => ({ ...current, score: finalScore }));
+    const unlock = !failed && !endless && level.id === 5;
+    persistScores({ highestScore: finalScore, bestEndlessRun: endless ? finalScore : 0, highestMorale: stats.morale, mostCelebrated: stats.celebrated, unlockedEndless: unlock });
+    setMode(failed ? "game-over" : "level-complete");
+    audio.current?.effect(failed ? "game-over" : "level-complete");
+    trackGameEvent(failed ? "game_over" : "level_completed", { level: level.id, score: finalScore, morale: stats.morale });
+  }, [endless, level.id, persistScores, stats]);
+
+  useEffect(() => {
+    if (mode !== "playing") return;
+    if (stats.morale > 0 && (endless || timeRemaining > 0)) return;
+    const timer = window.setTimeout(() => finishLevel(stats.morale <= 0), 0);
+    return () => window.clearTimeout(timer);
+  }, [endless, finishLevel, mode, stats.morale, timeRemaining]);
+
+  useEffect(() => {
+    const onVisibility = () => { if (document.hidden && modeRef.current === "playing") setMode("paused"); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
+  function toggleReward(id: RewardId) {
+    setSelectedRewards((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+    audio.current?.effect("click");
+  }
+
+  function updateJoystick(event: ReactPointerEvent<HTMLDivElement>) {
+    if (joystickPointer.current !== event.pointerId) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    let x = (event.clientX - (rect.left + rect.width / 2)) / (rect.width / 2);
+    let y = (event.clientY - (rect.top + rect.height / 2)) / (rect.height / 2);
+    const length = Math.hypot(x, y);
+    if (length > 1) { x /= length; y /= length; }
+    joystickVector.current = { x, y };
+    setJoystick({ x, y });
+  }
+
+  function beginJoystick(event: ReactPointerEvent<HTMLDivElement>) {
+    joystickPointer.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    updateJoystick(event);
+  }
+
+  function endJoystick() {
+    joystickPointer.current = null;
+    joystickVector.current = { x: 0, y: 0 };
+    setJoystick({ x: 0, y: 0 });
+  }
+
+  async function shareScore() {
+    const text = `I scored ${stats.score.toLocaleString()} in PerkJoy: Office Rush. Think you can beat me?`;
+    const data = { title: "PerkJoy: Office Rush", text, url: `${location.origin}/game` };
+    try {
+      if (navigator.share) await navigator.share(data);
+      else { await navigator.clipboard.writeText(`${text} ${data.url}`); setShareMessage("Game link copied"); }
+      trackGameEvent("score_shared", { score: stats.score });
+    } catch { setShareMessage("Sharing was canceled"); }
+    setTimeout(() => setShareMessage(""), 1800);
+  }
+
+  async function enterFullscreen() {
+    if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.();
+    else await document.exitFullscreen?.();
+  }
+
+  const setting = <K extends keyof AudioPreferences>(key: K, value: AudioPreferences[K]) => setAudioSettings((current) => ({ ...current, [key]: value }));
+
+  if (mode === "menu" || mode === "how-to" || mode === "high-scores") return (
+    <main className={styles.gamePage}>
+      <div className={styles.rotateScreen}><RotateCcw /><h1>Rotate Your Phone</h1><p>PerkJoy: Office Rush is best played in landscape mode.</p></div>
+      <div className={styles.menuBackdrop}>
+        <nav><Link href="/"><Logo /></Link><Link href="/"><ArrowLeft /> Back to PerkJoy</Link></nav>
+        <section className={styles.startCard}>
+          <div className={styles.startCopy}><span><Sparkles /> A PERKJOY BROWSER GAME</span><h1><small>PERKJOY:</small> OFFICE RUSH</h1><p>Can you keep your team feeling appreciated?</p></div>
+          <div className={styles.menuButtons}>
+            <button className="button button-primary" onClick={() => openLevel(0)}><Play /> Play</button>
+            <button className="button button-secondary" onClick={() => setMode("how-to")}><Info /> How to Play</button>
+            <button className="button button-secondary" onClick={() => setMode("high-scores")}><Trophy /> High Scores</button>
+            {highScores.unlockedEndless && <button className={styles.endlessButton} onClick={() => openLevel(0, true)}><Zap /> Office Rush — Endless</button>}
+          </div>
+          {mode === "how-to" && <aside className={styles.menuPanel}><button aria-label="Close how to play" onClick={() => setMode("menu")}>×</button><Gamepad2 /><h2>Keep the moments moving.</h2><ol><li><b>Move</b><span>WASD, arrow keys, or the touch joystick.</span></li><li><b>Interact</b><span>Press Space or INTERACT near an employee.</span></li><li><b>Celebrate</b><span>Choose the right rewards before time runs out.</span></li><li><b>Automate</b><span>Fill the lightning meter, then put appreciation on autopilot.</span></li></ol></aside>}
+          {mode === "high-scores" && <aside className={styles.menuPanel}><button aria-label="Close high scores" onClick={() => setMode("menu")}>×</button><Award /><h2>Your office records</h2><dl><div><dt>Highest score</dt><dd>{highScores.highestScore.toLocaleString()}</dd></div><div><dt>Best endless run</dt><dd>{highScores.bestEndlessRun.toLocaleString()}</dd></div><div><dt>Highest morale</dt><dd>{highScores.highestMorale}%</dd></div><div><dt>Employees celebrated</dt><dd>{highScores.mostCelebrated}</dd></div></dl></aside>}
+        </section>
+        <small className={styles.menuFoot}>Free browser game · No download required</small>
+      </div>
+    </main>
+  );
+
+  if (mode === "level-intro") return (
+    <main className={styles.gamePage}>
+      <div className={styles.rotateScreen}><RotateCcw /><h1>Rotate Your Phone</h1><p>PerkJoy: Office Rush is best played in landscape mode.</p></div>
+      <section className={styles.levelIntro}><span>{endless ? "ENDLESS MODE" : `LEVEL ${level.id}`}</span><h1>{level.name}</h1><p>{level.instruction}</p><button className="button button-primary button-large" onClick={() => void startLevel(levelIndex, endless)}>Start <ChevronRight /></button><button onClick={() => setMode("menu")}>Back to game menu</button></section>
+    </main>
+  );
+
+  const completion = mode === "level-complete" || mode === "game-over";
+  return (
+    <main className={styles.gamePage}>
+      <div className={styles.rotateScreen}><RotateCcw /><h1>Rotate Your Phone</h1><p>PerkJoy: Office Rush is best played in landscape mode.</p></div>
+      <div className={styles.gameShell}>
+        <header className={styles.hud}>
+          <div className={styles.hudBrand}><Logo /><span><small>{endless ? "OFFICE RUSH" : `LEVEL ${level.id}`}</small><b>{level.name}</b></span></div>
+          <div className={styles.morale}><span><Heart /> Team Morale</span><i><b style={{ width: `${stats.morale}%` }} /></i><strong>{Math.round(stats.morale)}%</strong></div>
+          <div className={styles.hudMetric}><small>TIME</small><b className={timeRemaining < 15 ? styles.warning : ""}>{endless ? formatTime(stats.celebrated * 8 + (level.duration - timeRemaining)) : formatTime(timeRemaining)}</b></div>
+          <div className={styles.hudMetric}><small>SCORE</small><b>{stats.score.toLocaleString()}</b></div>
+          <button className={styles.pauseButton} aria-label="Pause game" onClick={() => setMode("paused")}><Pause /></button>
+        </header>
+
+        <section className={styles.canvasWrap}>
+          <GameCanvas activeEmployeeIds={level.employeeIds} automationSeconds={automationSeconds} events={events} feedback={feedback} inventory={inventory} player={player} reducedMotion={audioSettings.reducedMotion} />
+          <div className={styles.objectiveBar}><span><b>{events.length}</b> active moment{events.length === 1 ? "" : "s"}</span><span>{inventory ? <><Gift /> Deliver the PerkJoy Local order</> : <><Sparkles /> Reach an employee before their timer ends</>}</span></div>
+          {tutorialStep > 0 && tutorialStep < 4 && <div className={styles.tutorial}><span>SAM&apos;S TIP</span><b>{tutorialStep === 1 ? "Move Jordan to Alex." : tutorialStep === 2 ? "Choose birthday rewards." : "Deliver it before time runs out."}</b></div>}
+
+          <button className={`${styles.automation} ${automationCharge >= 100 ? styles.ready : ""}`} onClick={activateAutomation} disabled={automationCharge < 100 || automationSeconds > 0}><Zap /><span><small>{automationSeconds > 0 ? "AUTOMATION ACTIVE" : "PERKJOY AUTOMATION"}</small><b>{automationSeconds > 0 ? `${Math.ceil(automationSeconds)}s remaining` : automationCharge >= 100 ? "Activate autopilot" : `${Math.round(automationCharge)}% charged`}</b></span><i><em style={{ width: `${automationSeconds > 0 ? 100 : automationCharge}%` }} /></i></button>
+
+          <div className={styles.touchControls}>
+            <div className={styles.joystick} onPointerDown={beginJoystick} onPointerMove={updateJoystick} onPointerUp={endJoystick} onPointerCancel={endJoystick}><i style={{ transform: `translate(${joystick.x * 28}px, ${joystick.y * 28}px)` }} /></div>
+            <div><button onPointerDown={(event) => { event.preventDefault(); interact(); }}><Check />Interact</button><button onPointerDown={(event) => { event.preventDefault(); quickReward(); }}><Gift />Reward</button></div>
+          </div>
+        </section>
+
+        <footer className={styles.gameFooter}><span><b>Move</b> WASD / Arrow Keys</span><span><b>Interact</b> Space</span><span><b>Quick Reward</b> E</span><span><b>Automation</b> A</span><button onClick={() => void enterFullscreen()}><Maximize2 /> Enter Fullscreen</button></footer>
+
+        {selectedEvent && <div className={styles.rewardOverlay}><section><header><span style={{ background: eventLabels[selectedEvent.type].color }}>{eventLabels[selectedEvent.type].icon}</span><div><small>{employees.find((employee) => employee.id === selectedEvent.employeeId)?.name}</small><h2>{selectedEvent.stage === "deliver" ? "Complete the local delivery" : `Choose a ${eventLabels[selectedEvent.type].label.toLowerCase()} reward`}</h2></div><b>{Math.ceil(selectedEvent.remaining)}s</b></header><div className={styles.rewardGrid}>{rewards.filter((reward) => selectedEvent.stage === "deliver" ? reward.id === "gift-box" : recommendedRewards[selectedEvent.type].includes(reward.id) || reward.id === "gift-card").map((reward) => <button key={reward.id} className={selectedRewards.includes(reward.id) ? styles.selected : ""} onClick={() => toggleReward(reward.id)}><span>{reward.icon}</span><b>{reward.label}</b><small>+{reward.points} points</small></button>)}</div><footer><button className="button button-ghost" onClick={() => setSelectedEventId(null)}>Keep moving</button><button className="button button-primary" disabled={!selectedRewards.length} onClick={() => completeEvent(selectedEvent.id, selectedRewards)}>Celebrate <Sparkles /></button></footer></section></div>}
+
+        {mode === "paused" && <div className={styles.pauseOverlay}><section><Pause /><h2>Office paused</h2><button className="button button-primary" onClick={() => setMode("playing")}><Play /> Resume</button><button className="button button-secondary" onClick={() => void startLevel(levelIndex, endless)}><RotateCcw /> Restart level</button><div className={styles.audioSettings}><label><span><Music2 /> Music</span><input type="range" min="0" max="1" step=".05" value={audioSettings.musicVolume} onChange={(event) => setting("musicVolume", Number(event.target.value))} /></label><label><span><Volume2 /> Sound effects</span><input type="range" min="0" max="1" step=".05" value={audioSettings.soundVolume} onChange={(event) => setting("soundVolume", Number(event.target.value))} /></label><button onClick={() => setting("musicEnabled", !audioSettings.musicEnabled)}>{audioSettings.musicEnabled ? <Music2 /> : <VolumeX />} Music {audioSettings.musicEnabled ? "On" : "Off"}</button><button onClick={() => setting("soundEnabled", !audioSettings.soundEnabled)}>{audioSettings.soundEnabled ? <Volume2 /> : <VolumeX />} Sound {audioSettings.soundEnabled ? "On" : "Off"}</button><label className={styles.motionSetting}><input type="checkbox" checked={audioSettings.reducedMotion} onChange={(event) => setting("reducedMotion", event.target.checked)} /> Reduce motion</label></div><button className={styles.quitButton} onClick={() => setMode("menu")}>Quit to game menu</button></section></div>}
+
+        {completion && <div className={styles.completeOverlay}><section><span>{mode === "game-over" ? "OFFICE MORALE CRASHED" : endless ? "OFFICE RUSH COMPLETE" : "LEVEL COMPLETE"}</span><h2>{mode === "game-over" ? "Too many important moments were missed." : rankForScore(stats.score)}</h2><div><article><small>Score</small><b>{stats.score.toLocaleString()}</b></article><article><small>Employees Celebrated</small><b>{stats.celebrated}</b></article><article><small>Moments Missed</small><b>{stats.missed}</b></article><article><small>Morale</small><b>{Math.round(stats.morale)}%</b></article><article><small>Best Combo</small><b>x{stats.bestCombo}</b></article></div><footer>{mode === "game-over" ? <button className="button button-primary" onClick={() => void startLevel(levelIndex, endless)}><RotateCcw /> Try Again</button> : !endless && level.id < 5 ? <button className="button button-primary" onClick={() => openLevel(levelIndex + 1)}><ChevronRight /> Next Level</button> : <button className="button button-primary" onClick={() => openLevel(0, true)}><Zap /> Play Endless Mode</button>}<button className="button button-secondary" onClick={() => void startLevel(levelIndex, endless)}>Replay</button><button className="button button-secondary" onClick={() => void shareScore()}><Share2 /> Share Score</button></footer>{shareMessage && <p className={styles.shareMessage}><Clipboard /> {shareMessage}</p>}{!endless && level.id === 5 && <aside className={styles.businessCta}><small>RUNNING A REAL TEAM?</small><b>Don&apos;t play the employee appreciation game in real life.</b><p>Let PerkJoy remember for you.</p><Link href="/#how" onClick={() => trackGameEvent("business_cta_clicked")} className="button button-dark">See How PerkJoy Works</Link></aside>}<button className={styles.menuReturn} onClick={() => setMode("menu")}>Back to game menu</button></section></div>}
+      </div>
+    </main>
+  );
+}
