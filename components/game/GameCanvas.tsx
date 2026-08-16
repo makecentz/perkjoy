@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { characterCrops, employees, eventLabels, GAME_HEIGHT, GAME_WIDTH } from "@/lib/game/config";
-import type { CharacterId, OfficeEvent, Position } from "@/types/game";
+import type { CharacterId, OfficeEvent, PlayerAction, Position } from "@/types/game";
 
 type Props = {
   activeEmployeeIds: string[];
@@ -11,10 +11,13 @@ type Props = {
   feedback: { label: string; x: number; y: number; perfect: boolean } | null;
   inventory: string | null;
   player: Position;
+  playerAction: PlayerAction;
+  playerFacing: -1 | 1;
   reducedMotion: boolean;
 };
 
 const sheetUrl = "/game/characters/perkjoy-character-sheet.png";
+const jordanAnimationUrl = "/game/characters/jordan-animation-sheet.png";
 
 function roundedRect(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
   context.beginPath();
@@ -67,6 +70,49 @@ function drawCharacter(context: CanvasRenderingContext2D, sprites: Sprites, char
   context.shadowBlur = 7;
   context.shadowOffsetY = 4;
   context.drawImage(sprites[character], position.x - width / 2, position.y - height + bob, width, height);
+  context.restore();
+}
+
+function drawAnimatedJordan(
+  context: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  action: PlayerAction,
+  facing: -1 | 1,
+  position: Position,
+  reducedMotion: boolean,
+  time: number,
+) {
+  const rows: Record<PlayerAction, readonly [number, number]> = {
+    idle: [0, .2674],
+    walk: [.2674, .5119],
+    grab: [.5119, .74],
+    give: [.74, 1],
+  };
+  const frameLengths: Record<PlayerAction, number> = { idle: 430, walk: 130, grab: 155, give: 165 };
+  const frame = reducedMotion ? 0 : Math.floor(time / frameLengths[action]) % 4;
+  const sourceWidth = image.naturalWidth / 4;
+  const [rowStart, rowEnd] = rows[action];
+  const sourceY = image.naturalHeight * rowStart;
+  const sourceHeight = image.naturalHeight * (rowEnd - rowStart);
+  const height = 150;
+  const width = height * (sourceWidth / sourceHeight);
+  context.save();
+  context.translate(position.x, 0);
+  context.scale(facing, 1);
+  context.shadowColor = "rgba(16,31,46,.18)";
+  context.shadowBlur = 8;
+  context.shadowOffsetY = 5;
+  context.drawImage(
+    image,
+    frame * sourceWidth,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    -width / 2,
+    position.y - height,
+    width,
+    height,
+  );
   context.restore();
 }
 
@@ -136,7 +182,7 @@ function drawEventBubble(context: CanvasRenderingContext2D, event: OfficeEvent, 
   const warning = event.remaining <= 7;
   const pulse = warning ? 1 + Math.sin(time / 120) * .04 : 1;
   context.save();
-  context.translate(position.x, position.y - 112);
+  context.translate(position.x, position.y - 125);
   context.scale(pulse, pulse);
   roundedRect(context, -49, -27, 98, 52, 13);
   context.fillStyle = warning ? "#fff0ec" : "rgba(255,255,255,.96)";
@@ -156,13 +202,13 @@ function drawEventBubble(context: CanvasRenderingContext2D, event: OfficeEvent, 
   context.restore();
 }
 
-export function GameCanvas({ activeEmployeeIds, automationSeconds, events, feedback, inventory, player, reducedMotion }: Props) {
+export function GameCanvas({ activeEmployeeIds, automationSeconds, events, feedback, inventory, player, playerAction, playerFacing, reducedMotion }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const sceneRef = useRef<Props>({ activeEmployeeIds, automationSeconds, events, feedback, inventory, player, reducedMotion });
+  const sceneRef = useRef<Props>({ activeEmployeeIds, automationSeconds, events, feedback, inventory, player, playerAction, playerFacing, reducedMotion });
 
   useEffect(() => {
-    sceneRef.current = { activeEmployeeIds, automationSeconds, events, feedback, inventory, player, reducedMotion };
-  }, [activeEmployeeIds, automationSeconds, events, feedback, inventory, player, reducedMotion]);
+    sceneRef.current = { activeEmployeeIds, automationSeconds, events, feedback, inventory, player, playerAction, playerFacing, reducedMotion };
+  }, [activeEmployeeIds, automationSeconds, events, feedback, inventory, player, playerAction, playerFacing, reducedMotion]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -170,7 +216,8 @@ export function GameCanvas({ activeEmployeeIds, automationSeconds, events, feedb
     const context = canvas.getContext("2d");
     if (!context) return;
     const image = new Image();
-    image.src = sheetUrl;
+    const jordanAnimation = new Image();
+    let jordanAnimationReady = false;
     let sprites: Sprites | null = null;
     let frame = 0;
     let active = true;
@@ -184,7 +231,7 @@ export function GameCanvas({ activeEmployeeIds, automationSeconds, events, feedb
       scene.activeEmployeeIds.forEach((id, index) => {
         const employee = employees.find((item) => item.id === id);
         if (!employee || !sprites) return;
-        drawCharacter(context, sprites, employee.character, employee.position, employee.character === "sam" ? 82 : 91, bob * (index % 2 ? -1 : 1));
+        drawCharacter(context, sprites, employee.character, employee.position, employee.character === "sam" ? 108 : 116, bob * (index % 2 ? -1 : 1));
         context.textAlign = "center";
         context.font = "800 10px sans-serif";
         context.fillStyle = "#253b45";
@@ -192,7 +239,7 @@ export function GameCanvas({ activeEmployeeIds, automationSeconds, events, feedb
       });
 
       const pickup = scene.events.some((event) => event.stage === "pickup");
-      if (pickup && sprites) drawCharacter(context, sprites, "riley", { x: 108, y: 302 }, 98, bob);
+      if (pickup && sprites) drawCharacter(context, sprites, "riley", { x: 108, y: 302 }, 126, bob);
 
       scene.events.forEach((event) => {
         const employee = employees.find((item) => item.id === event.employeeId);
@@ -200,7 +247,8 @@ export function GameCanvas({ activeEmployeeIds, automationSeconds, events, feedb
         if (position) drawEventBubble(context, event, position, time);
       });
 
-      if (sprites) drawCharacter(context, sprites, "jordan", scene.player, 106, bob * .6);
+      if (jordanAnimationReady) drawAnimatedJordan(context, jordanAnimation, scene.playerAction, scene.playerFacing, scene.player, scene.reducedMotion, time);
+      else if (sprites) drawCharacter(context, sprites, "jordan", scene.player, 142, bob * .6);
       if (scene.inventory) {
         context.fillStyle = "#f36f55";
         roundedRect(context, scene.player.x + 22, scene.player.y - 92, 42, 26, 8); context.fill();
@@ -245,6 +293,9 @@ export function GameCanvas({ activeEmployeeIds, automationSeconds, events, feedb
       };
       frame = requestAnimationFrame(draw);
     };
+    jordanAnimation.onload = () => { jordanAnimationReady = true; };
+    image.src = sheetUrl;
+    jordanAnimation.src = jordanAnimationUrl;
     return () => { active = false; cancelAnimationFrame(frame); };
   }, []);
 

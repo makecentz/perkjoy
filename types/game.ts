@@ -1,4 +1,5 @@
 export type CharacterId = "jordan" | "alex" | "taylor" | "sam" | "riley";
+export type PlayerAction = "idle" | "walk" | "grab" | "give";
 export type EventType = "birthday" | "anniversary" | "accomplishment" | "promotion" | "delivery";
 export type RewardId = "card" | "cake" | "balloons" | "gift-card" | "flowers" | "cookies" | "gift-box" | "badge";
 export type GameMode = "menu" | "how-to" | "high-scores" | "level-intro" | "playing" | "paused" | "level-complete" | "game-over";

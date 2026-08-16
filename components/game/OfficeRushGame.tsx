@@ -13,7 +13,7 @@ import { trackGameEvent } from "@/lib/game/analytics";
 import { employees, endlessLevel, eventLabels, GAME_HEIGHT, GAME_WIDTH, levels, recommendedRewards, rewards } from "@/lib/game/config";
 import { celebrationResult, clamp, distance, makeEvent, rankForScore } from "@/lib/game/simulation";
 import { defaultAudio, defaultScores, loadAudio, loadScores, saveAudio, saveScores } from "@/lib/game/storage";
-import type { AudioPreferences, GameMode, GameStats, HighScores, LevelDefinition, OfficeEvent, Position, RewardId } from "@/types/game";
+import type { AudioPreferences, GameMode, GameStats, HighScores, LevelDefinition, OfficeEvent, PlayerAction, Position, RewardId } from "@/types/game";
 import { GameCanvas } from "./GameCanvas";
 import styles from "./office-rush.module.css";
 
@@ -33,6 +33,8 @@ export function OfficeRushGame() {
   const [events, setEvents] = useState<OfficeEvent[]>([]);
   const [stats, setStats] = useState<GameStats>(initialStats);
   const [player, setPlayer] = useState<Position>(startPosition);
+  const [playerAction, setPlayerAction] = useState<PlayerAction>("idle");
+  const [playerFacing, setPlayerFacing] = useState<-1 | 1>(1);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [selectedRewards, setSelectedRewards] = useState<RewardId[]>([]);
   const [inventory, setInventory] = useState<string | null>(null);
@@ -50,6 +52,9 @@ export function OfficeRushGame() {
   const joystickPointer = useRef<number | null>(null);
   const spawnAccumulator = useRef(0);
   const sequence = useRef(0);
+  const playerActionRef = useRef<PlayerAction>("idle");
+  const playerFacingRef = useRef<-1 | 1>(1);
+  const actionTimer = useRef<number | null>(null);
   const audio = useRef<OfficeRushAudio | null>(null);
   const modeRef = useRef<GameMode>(mode);
   const level: LevelDefinition = endless ? endlessLevel : levels[levelIndex];
@@ -63,7 +68,11 @@ export function OfficeRushGame() {
       setHighScores(scores);
       setAudioSettings(settings);
     }, 0);
-    return () => { window.clearTimeout(hydrate); audio.current?.destroy(); };
+    return () => {
+      window.clearTimeout(hydrate);
+      if (actionTimer.current !== null) window.clearTimeout(actionTimer.current);
+      audio.current?.destroy();
+    };
   }, []);
 
   useEffect(() => { modeRef.current = mode; }, [mode]);
@@ -73,6 +82,21 @@ export function OfficeRushGame() {
     const saved = saveScores(partial);
     setHighScores(saved);
   }, []);
+
+  const updatePlayerAction = useCallback((action: PlayerAction) => {
+    if (playerActionRef.current === action) return;
+    playerActionRef.current = action;
+    setPlayerAction(action);
+  }, []);
+
+  const playPlayerAction = useCallback((action: Extract<PlayerAction, "grab" | "give">) => {
+    if (actionTimer.current !== null) window.clearTimeout(actionTimer.current);
+    updatePlayerAction(action);
+    actionTimer.current = window.setTimeout(() => {
+      updatePlayerAction("idle");
+      actionTimer.current = null;
+    }, 680);
+  }, [updatePlayerAction]);
 
   const startLevel = useCallback(async (index = levelIndex, isEndless = endless) => {
     const nextLevel = isEndless ? endlessLevel : levels[index];
@@ -85,6 +109,9 @@ export function OfficeRushGame() {
     eventsRef.current = [];
     setEvents([]);
     setPlayer(startPosition);
+    playerFacingRef.current = 1;
+    setPlayerFacing(1);
+    updatePlayerAction("idle");
     setTimeRemaining(nextLevel.duration);
     setSelectedEventId(null);
     setSelectedRewards([]);
@@ -97,7 +124,7 @@ export function OfficeRushGame() {
     sequence.current = 0;
     setMode("playing");
     trackGameEvent("level_started", { level: nextLevel.id, endless: isEndless });
-  }, [endless, levelIndex]);
+  }, [endless, levelIndex, updatePlayerAction]);
 
   const openLevel = useCallback((index: number, isEndless = false) => {
     setLevelIndex(index);
@@ -115,6 +142,7 @@ export function OfficeRushGame() {
     const event = eventsRef.current.find((item) => item.id === eventId);
     if (!event) return;
     if (event.stage === "pickup") {
+      playPlayerAction("grab");
       const next = eventsRef.current.map((item) => item.id === eventId ? { ...item, stage: "deliver" as const } : item);
       eventsRef.current = next;
       setEvents(next);
@@ -126,6 +154,7 @@ export function OfficeRushGame() {
       return;
     }
     const result = celebrationResult(event, chosen.length ? chosen : recommendedRewards[event.type].slice(0, 1));
+    playPlayerAction("give");
     const position = rewardPosition(event);
     const nextEvents = eventsRef.current.filter((item) => item.id !== eventId);
     eventsRef.current = nextEvents;
@@ -146,7 +175,7 @@ export function OfficeRushGame() {
     setTimeout(() => setFeedback(null), result.perfect ? 1700 : 1100);
     audio.current?.effect(event.type === "birthday" ? "birthday" : "success");
     setTutorialStep((step) => step > 0 ? Math.min(4, step + 1) : step);
-  }, [rewardPosition]);
+  }, [playPlayerAction, rewardPosition]);
 
   const interact = useCallback(() => {
     if (modeRef.current !== "playing") return;
@@ -219,14 +248,22 @@ export function OfficeRushGame() {
         const length = Math.hypot(x, y);
         if (length > 0) {
           x /= Math.max(1, length); y /= Math.max(1, length);
+          updatePlayerAction("walk");
+          if (x !== 0) {
+            const facing = x < 0 ? -1 : 1;
+            if (playerFacingRef.current !== facing) {
+              playerFacingRef.current = facing;
+              setPlayerFacing(facing);
+            }
+          }
           setPlayer((current) => ({ x: clamp(current.x + x * 188 * delta, 42, GAME_WIDTH - 40), y: clamp(current.y + y * 188 * delta, 135, GAME_HEIGHT - 25) }));
-        }
+        } else if (playerActionRef.current === "walk") updatePlayerAction("idle");
       }
       frame = requestAnimationFrame(move);
     };
     frame = requestAnimationFrame(move);
     return () => cancelAnimationFrame(frame);
-  }, [selectedEventId]);
+  }, [selectedEventId, updatePlayerAction]);
 
   useEffect(() => {
     if (mode !== "playing") return;
@@ -383,7 +420,7 @@ export function OfficeRushGame() {
         </header>
 
         <section className={styles.canvasWrap}>
-          <GameCanvas activeEmployeeIds={level.employeeIds} automationSeconds={automationSeconds} events={events} feedback={feedback} inventory={inventory} player={player} reducedMotion={audioSettings.reducedMotion} />
+          <GameCanvas activeEmployeeIds={level.employeeIds} automationSeconds={automationSeconds} events={events} feedback={feedback} inventory={inventory} player={player} playerAction={playerAction} playerFacing={playerFacing} reducedMotion={audioSettings.reducedMotion} />
           <div className={styles.objectiveBar}><span><b>{events.length}</b> active moment{events.length === 1 ? "" : "s"}</span><span>{inventory ? <><Gift /> Deliver the PerkJoy Local order</> : <><Sparkles /> Reach an employee before their timer ends</>}</span></div>
           {tutorialStep > 0 && tutorialStep < 4 && <div className={styles.tutorial}><span>SAM&apos;S TIP</span><b>{tutorialStep === 1 ? "Move Jordan to Alex." : tutorialStep === 2 ? "Choose birthday rewards." : "Deliver it before time runs out."}</b></div>}
 
