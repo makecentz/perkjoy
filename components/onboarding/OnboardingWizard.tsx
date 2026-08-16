@@ -18,6 +18,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
+import { VendorDashboard } from "@/components/vendor/VendorDashboard";
 import { automationTemplates } from "@/lib/automation-templates";
 import type { Workspace } from "@/lib/types";
 import { authenticatedFetch } from "@/lib/supabase/fetch";
@@ -43,6 +44,7 @@ export function OnboardingWizard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [complete, setComplete] = useState(false);
+  const [vendorAccount, setVendorAccount] = useState(false);
   const [previewEnd] = useState(() => Date.now() + 30 * 86400000);
 
   useEffect(() => {
@@ -63,11 +65,25 @@ export function OnboardingWizard() {
             .map((type) => type.id),
         );
       })
-      .catch((reason: unknown) =>
+      .catch(async (reason: unknown) => {
+        // A newly-created browser session can be available to authenticatedFetch
+        // before the Server Component sees its cookie. Check the vendor workspace
+        // before showing a business-membership error.
+        try {
+          const vendorResponse = await authenticatedFetch("/api/vendor/workspace", {
+            cache: "no-store",
+          });
+          if (vendorResponse.ok) {
+            setVendorAccount(true);
+            return;
+          }
+        } catch {
+          // Preserve the original workspace error for genuine business accounts.
+        }
         setError(
           reason instanceof Error ? reason.message : "Unable to load setup",
-        ),
-      );
+        );
+      });
   }, []);
   const upcoming = useMemo(() => {
     if (!data) return [];
@@ -115,6 +131,7 @@ export function OnboardingWizard() {
     }
   }
 
+  if (vendorAccount) return <VendorDashboard onboarding />;
   if (!data && !error)
     return (
       <main className="onboarding-loading">
