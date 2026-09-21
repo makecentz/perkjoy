@@ -203,6 +203,7 @@ async function loadWorkspace(
     return [{
       id: product.id,
       vendorName: vendorName.get(product.vendor_id) ?? "PerkJoy Local",
+      imageUrl: product.image_url,
       name: product.name,
       description: product.description ?? "",
       category: product.category,

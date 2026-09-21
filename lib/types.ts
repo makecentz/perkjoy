@@ -95,6 +95,7 @@ export type AutomationRun = {
 export type Product = {
   id: string;
   vendorName: string;
+  imageUrl?: string | null;
   name: string;
   description: string;
   category: string;

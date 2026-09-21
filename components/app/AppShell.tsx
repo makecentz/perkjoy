@@ -1695,7 +1695,7 @@ function LocalView({
         {filtered.map((product, index) => (
           <article key={product.id}>
             <div className={`catalog-art art-${(index % 3) + 1}`}>
-              <span>
+              {product.imageUrl ? <Image src={product.imageUrl} alt={product.name} fill sizes="(max-width: 760px) 100vw, (max-width: 1180px) 50vw, 33vw" unoptimized /> : <span>
                 {product.category === "Flowers"
                   ? "💐"
                   : product.category === "Food & Lunch"
@@ -1707,8 +1707,8 @@ function LocalView({
                         : index % 2
                           ? "🧁"
                           : "🎂"}
-              </span>
-              <em>Demo vendor</em>
+              </span>}
+              <em>{product.vendorName}</em>
             </div>
             <div>
               <small>{product.category}</small>
@@ -2055,7 +2055,7 @@ function PhaseDLocalView({
             {filtered.map((product, index) => (
               <article key={product.id}>
                 <div className={`catalog-art art-${(index % 3) + 1}`}>
-                  <span>
+                  {product.imageUrl ? <Image src={product.imageUrl} alt={product.name} fill sizes="(max-width: 760px) 100vw, (max-width: 1180px) 50vw, 33vw" unoptimized /> : <span>
                     {product.category === "Flowers"
                       ? "💐"
                       : product.category === "Food & Lunch"
@@ -2067,7 +2067,7 @@ function PhaseDLocalView({
                             : index % 2
                               ? "🧁"
                               : "🎂"}
-                  </span>
+                  </span>}
                   <em>{product.vendorName}</em>
                 </div>
                 <div>

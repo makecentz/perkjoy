@@ -2034,6 +2034,7 @@ export type Database = {
           gross_margin: number
           id: string
           image_url: string | null
+          image_urls: string[]
           lead_time_text: string | null
           minimum_notice_hours: number
           name: string
@@ -2060,6 +2061,7 @@ export type Database = {
           gross_margin?: number
           id?: string
           image_url?: string | null
+          image_urls?: string[]
           lead_time_text?: string | null
           minimum_notice_hours?: number
           name: string
@@ -2086,6 +2088,7 @@ export type Database = {
           gross_margin?: number
           id?: string
           image_url?: string | null
+          image_urls?: string[]
           lead_time_text?: string | null
           minimum_notice_hours?: number
           name?: string
