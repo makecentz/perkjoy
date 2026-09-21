@@ -1,0 +1,3 @@
+create index support_conversations_opened_by_idx on public.support_conversations(opened_by);
+create index support_conversations_assigned_to_idx on public.support_conversations(assigned_to);
+create index support_messages_sender_idx on public.support_messages(sender_id);

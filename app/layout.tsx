@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { DM_Sans, Manrope } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
+import { SupportWidget } from "@/components/support/SupportWidget";
 
 const body = DM_Sans({ variable: "--font-body", subsets: ["latin"] });
 const display = Manrope({ variable: "--font-display", subsets: ["latin"] });
@@ -25,7 +26,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('perkjoy-theme');if(t!=='light'&&t!=='dark')t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t}catch(e){}})()` }} /></head>
-      <body className={`${body.variable} ${display.variable}`}>{children}</body>
+      <body className={`${body.variable} ${display.variable}`}>{children}<SupportWidget /></body>
     </html>
   );
 }

@@ -9,6 +9,8 @@ import { AdminIntegrationSettings } from "@/components/admin/AdminIntegrationSet
 import { StripeConnectPanel } from "@/components/admin/StripeConnectPanel";
 import { AdminFinancials } from "@/components/admin/AdminFinancials";
 import { AdminVendorManager } from "@/components/admin/AdminVendorManager";
+import { AdminClientManager } from "@/components/admin/AdminClientManager";
+import { AdminSupportInbox } from "@/components/admin/AdminSupportInbox";
 import { getPlatformFinancials } from "@/lib/platform-financials";
 
 export const metadata: Metadata = { title: "PerkJoy Operations" };
@@ -26,7 +28,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
   if (!authorized) return <AdminGate identified={Boolean(user)} />;
 
   const requestedSection = (await searchParams).section;
-  const allowedSections = new Set(["overview", "operations", "vendors", "financials", "payouts", "settings"]);
+  const allowedSections = new Set(["overview", "operations", "clients", "vendors", "support", "financials", "payouts", "settings"]);
   const section = requestedSection && allowedSections.has(requestedSection) ? requestedSection : "overview";
   if (section === "settings") return <AdminShell section="settings"><AdminIntegrationSettings /></AdminShell>;
   if (section === "payouts") return <AdminShell section="payouts"><StripeConnectPanel /></AdminShell>;
@@ -34,6 +36,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
     const financials = await getPlatformFinancials();
     return <AdminShell section="financials"><AdminFinancials initialRateBps={financials.rateBps} updatedAt={financials.updatedAt} metrics={financials.metrics} /></AdminShell>;
   }
+  if (section === "clients") return <AdminShell section="clients"><div className="admin-console admin-clients-page"><header><div><h1>Client accounts.</h1><p>Monitor budgets, employees, orders, and account details in one place.</p></div><span><i /> Organization records</span></header><AdminClientManager /></div></AdminShell>;
+  if (section === "support") return <AdminShell section="support"><div className="admin-console admin-support-page"><header><div><h1>Client support.</h1><p>Reply to clients, preserve conversation history, and track every issue through resolution.</p></div><span><i /> Support inbox</span></header><AdminSupportInbox /></div></AdminShell>;
 
   const analytics = await getAdminAnalytics();
   const { metrics, queue, vendorPerformance } = analytics;

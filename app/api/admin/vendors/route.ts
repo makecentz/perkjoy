@@ -52,7 +52,7 @@ export async function GET(request: Request) {
   if (!await requireSuperAdmin(request)) return Response.json({ error: "Super Admin access is required." }, { status: 403 });
   const admin = createAdminSupabaseClient();
   const [vendorResult, productResult, listingResult, marketResult] = await Promise.all([
-    admin.from("vendors").select("id,business_name,email,city,state,logo_url,active,featured,market_id,created_at").order("created_at", { ascending: false }),
+    admin.from("vendors").select("id,business_name,description,website_url,email,phone,address,city,state,postal_code,logo_url,active,featured,market_id,minimum_notice_hours,service_area,internal_notes,created_at").order("created_at", { ascending: false }),
     admin.from("vendor_products").select("id,vendor_id,active"),
     admin.from("marketplace_listings").select("product_id,active"),
     admin.from("markets").select("id,name,city,state,active").order("name"),
@@ -66,11 +66,22 @@ export async function GET(request: Request) {
     return {
       id: vendor.id,
       businessName: vendor.business_name,
+      description: vendor.description,
+      websiteUrl: vendor.website_url,
       email: vendor.email,
+      phone: vendor.phone,
+      address: vendor.address,
+      city: vendor.city,
+      state: vendor.state,
+      postalCode: vendor.postal_code,
       location: [vendor.city, vendor.state].filter(Boolean).join(", "),
       logoUrl: vendor.logo_url,
       active: vendor.active,
       featured: vendor.featured,
+      marketId: vendor.market_id,
+      minimumNoticeHours: vendor.minimum_notice_hours,
+      serviceAreaNotes: typeof vendor.service_area === "object" && vendor.service_area && !Array.isArray(vendor.service_area) ? String((vendor.service_area as Record<string, unknown>).notes || "") : "",
+      internalNotes: vendor.internal_notes,
       marketName: vendor.market_id ? marketNames.get(vendor.market_id) || "Unassigned" : "Unassigned",
       listingCount: products.length,
       activeListingCount: vendor.active ? products.filter((product) => product.active && listingsByProduct.get(product.id)).length : 0,
@@ -216,10 +227,19 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   if (!await requireSuperAdmin(request)) return Response.json({ error: "Super Admin access is required." }, { status: 403 });
-  const payload = await request.json() as { vendorId?: string; active?: boolean };
-  if (!payload.vendorId || typeof payload.active !== "boolean") return Response.json({ error: "Vendor and status are required." }, { status: 400 });
+  const payload = await request.json() as { vendorId?: string; active?: boolean; details?: { businessName?: string; description?: string; websiteUrl?: string; email?: string; phone?: string; address?: string; city?: string; state?: string; postalCode?: string; marketId?: string; minimumNoticeHours?: number; serviceAreaNotes?: string; internalNotes?: string; featured?: boolean; active?: boolean } };
+  if (!payload.vendorId) return Response.json({ error: "Vendor is required." }, { status: 400 });
   const admin = createAdminSupabaseClient();
-  const vendorResult = await admin.from("vendors").update({ active: payload.active }).eq("id", payload.vendorId).select("id").single();
+  const update = payload.details ? {
+    business_name: payload.details.businessName?.trim(), description: payload.details.description?.trim(), website_url: payload.details.websiteUrl?.trim() || null,
+    email: payload.details.email?.trim() || null, phone: payload.details.phone?.trim() || null, address: payload.details.address?.trim() || null,
+    city: payload.details.city?.trim(), state: payload.details.state?.trim().toUpperCase(), postal_code: payload.details.postalCode?.trim() || null,
+    market_id: payload.details.marketId, minimum_notice_hours: payload.details.minimumNoticeHours, service_area: { notes: payload.details.serviceAreaNotes?.trim() || "" },
+    internal_notes: payload.details.internalNotes?.trim() || null, featured: Boolean(payload.details.featured), active: Boolean(payload.details.active),
+  } : { active: payload.active };
+  if (payload.details && (!update.business_name || !update.description || !update.city || !update.state || !update.market_id || typeof update.minimum_notice_hours !== "number" || update.minimum_notice_hours < 0)) return Response.json({ error: "Name, description, location, marketplace, and notice time are required." }, { status: 400 });
+  if (!payload.details && typeof payload.active !== "boolean") return Response.json({ error: "Vendor status is required." }, { status: 400 });
+  const vendorResult = await admin.from("vendors").update(update).eq("id", payload.vendorId).select("id").single();
   if (vendorResult.error) return Response.json({ error: vendorResult.error.message }, { status: 500 });
-  return Response.json({ vendorId: payload.vendorId, active: payload.active });
+  return Response.json({ vendorId: payload.vendorId });
 }

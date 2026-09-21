@@ -2,17 +2,28 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Building2, Check, ImagePlus, LoaderCircle, MapPin, Plus, Power, Store, Upload, X } from "lucide-react";
+import { Building2, Check, ImagePlus, LoaderCircle, MapPin, Pencil, Plus, Power, Save, Store, Upload, X } from "lucide-react";
 import { authenticatedFetch } from "@/lib/supabase/fetch";
 
 type Vendor = {
   id: string;
   businessName: string;
+  description: string;
+  websiteUrl: string | null;
   email: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string;
+  state: string;
+  postalCode: string | null;
   location: string;
   logoUrl: string | null;
   active: boolean;
   featured: boolean;
+  marketId: string | null;
+  minimumNoticeHours: number;
+  serviceAreaNotes: string;
+  internalNotes: string | null;
   marketName: string;
   listingCount: number;
   activeListingCount: number;
@@ -36,6 +47,7 @@ export function AdminVendorManager() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [markets, setMarkets] = useState<Market[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<Vendor | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -104,6 +116,17 @@ export function AdminVendorManager() {
     }
   }
 
+  async function saveDetails(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (!editing) return; setSaving(true); setError(""); setMessage("");
+    const form = new FormData(event.currentTarget);
+    const details = Object.fromEntries(form.entries()) as Record<string, string | FormDataEntryValue>;
+    try {
+      const response = await authenticatedFetch("/api/admin/vendors", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ vendorId: editing.id, details: { ...details, minimumNoticeHours: Number(details.minimumNoticeHours), featured: form.get("featured") === "on", active: form.get("active") === "on" } }) });
+      const result = await response.json() as { error?: string }; if (!response.ok) throw new Error(result.error || "Unable to update vendor.");
+      setMessage(`${details.businessName} was updated.`); setEditing(null); await loadCatalog();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to update vendor."); } finally { setSaving(false); }
+  }
+
   return <div className="admin-vendor-manager">
     <div className="admin-vendor-toolbar"><div><h2>Vendor directory</h2><p>Add a complete marketplace listing and control its customer visibility.</p></div><button className="button button-primary" type="button" onClick={() => setShowForm((open) => !open)}>{showForm ? <X /> : <Plus />}{showForm ? "Close form" : "Add vendor"}</button></div>
     {(message || error) && <p className={`vendor-admin-message ${error ? "error" : "success"}`}>{error || message}</p>}
@@ -144,8 +167,9 @@ export function AdminVendorManager() {
         <span className="vendor-directory-logo">{vendor.logoUrl ? <Image src={vendor.logoUrl} alt={`${vendor.businessName} logo`} fill sizes="52px" unoptimized /> : <Store />}</span>
         <div><span className="vendor-name-line"><b>{vendor.businessName}</b>{vendor.featured && <em>Featured</em>}</span><small><MapPin /> {vendor.marketName} · {vendor.location || "Location pending"}</small><small>{vendor.email || "No contact email"}</small></div>
         <span className="vendor-listing-count"><b>{vendor.activeListingCount}/{vendor.listingCount}</b><small>active listings</small></span>
-        <label className={`vendor-status-toggle ${vendor.active ? "active" : ""}`}><input type="checkbox" checked={vendor.active} onChange={(event) => void setActive(vendor, event.target.checked)} /><span><Power />{vendor.active ? "Active" : "Inactive"}</span></label>
+        <span className="vendor-directory-actions"><button type="button" onClick={() => setEditing(vendor)}><Pencil /> Edit</button><label className={`vendor-status-toggle ${vendor.active ? "active" : ""}`}><input type="checkbox" checked={vendor.active} onChange={(event) => void setActive(vendor, event.target.checked)} /><span><Power />{vendor.active ? "Active" : "Inactive"}</span></label></span>
       </article>)}
     </section>
+    {editing && <div className="admin-edit-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditing(null); }}><form className="admin-edit-card" onSubmit={saveDetails}><header><div><small>VENDOR RECORD</small><h2>Edit {editing.businessName}</h2></div><button type="button" onClick={() => setEditing(null)}><X /></button></header><div className="vendor-form-grid"><label className="span-2">Business name<input name="businessName" required defaultValue={editing.businessName} /></label><label className="span-2">Description<textarea name="description" rows={3} required defaultValue={editing.description} /></label><label>Email<input name="email" type="email" defaultValue={editing.email || ""} /></label><label>Phone<input name="phone" defaultValue={editing.phone || ""} /></label><label className="span-2">Website<input name="websiteUrl" type="url" defaultValue={editing.websiteUrl || ""} /></label><label className="span-2">Street address<input name="address" defaultValue={editing.address || ""} /></label><label>City<input name="city" required defaultValue={editing.city} /></label><label>State<input name="state" required maxLength={2} defaultValue={editing.state} /></label><label>Postal code<input name="postalCode" defaultValue={editing.postalCode || ""} /></label><label>Marketplace<select name="marketId" required defaultValue={editing.marketId || ""}>{markets.map((market) => <option key={market.id} value={market.id}>{market.name}</option>)}</select></label><label>Minimum notice (hours)<input name="minimumNoticeHours" type="number" min="0" required defaultValue={editing.minimumNoticeHours} /></label><label>Service area notes<input name="serviceAreaNotes" defaultValue={editing.serviceAreaNotes} /></label><label className="span-2">Internal notes<textarea name="internalNotes" rows={2} defaultValue={editing.internalNotes || ""} /></label><div className="vendor-check"><input id="edit-vendor-featured" name="featured" type="checkbox" defaultChecked={editing.featured} /><label htmlFor="edit-vendor-featured">Featured vendor</label></div><div className="vendor-check"><input id="edit-vendor-active" name="active" type="checkbox" defaultChecked={editing.active} /><label htmlFor="edit-vendor-active">Active and visible</label></div></div><footer><button className="button button-secondary" type="button" onClick={() => setEditing(null)}>Cancel</button><button className="button button-primary" disabled={saving}>{saving ? <LoaderCircle className="spin" /> : <Save />} Save vendor</button></footer></form></div>}
   </div>;
 }
