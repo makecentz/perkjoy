@@ -71,6 +71,6 @@ export function SupportWidget() {
         </>}
       </>}
     </section>}
-    <button className="support-launcher" type="button" onClick={() => setOpen((value) => !value)} aria-label={open ? "Close support" : "Open support chat"}>{open ? <X /> : <MessageCircle />}<span>Support</span></button>
+    <button className="support-launcher" type="button" onClick={() => setOpen((value) => !value)} aria-label={open ? "Close support" : "Open support chat"} aria-expanded={open}>{open ? <X /> : <MessageCircle />}<span role="tooltip">{open ? "Close support" : "Chat with support"}</span></button>
   </div>;
 }
